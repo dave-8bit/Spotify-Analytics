@@ -32,5 +32,3 @@ export const disconnectPrisma = async (): Promise<void> => {
   }
 };
 
-
-
