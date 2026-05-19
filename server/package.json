@@ -4,9 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.ts"
   },
   "keywords": [],
+
   "author": "",
   "license": "ISC",
   "dependencies": {
@@ -17,6 +20,7 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-session": "^1.19.0",
+    "groq-sdk": "^1.2.0",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1"
   },
