@@ -61,7 +61,59 @@ router.get("/top-albums", async (req: Request, res: Response) => {
   res.json({ data: albums });
 });
 
+router.get("/top-tracks-db", async (req: Request, res: Response) => {
+  const session = getSession(req);
+  const userId = session.userId!;
+
+  const days = Number(req.query.days ?? 28);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const tracks = await prisma.playEvent.groupBy({
+    by: ["trackId", "trackName", "artistName", "albumImage"],
+    where: { userId, playedAt: { gte: since } },
+    orderBy: { _count: { trackId: "desc" } },
+    take: 50,
+  });
+
+  res.json({ data: tracks });
+});
+
+router.get("/top-artists-db", async (req: Request, res: Response) => {
+  const session = getSession(req);
+  const userId = session.userId!;
+
+  const days = Number(req.query.days ?? 28);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const artists = await prisma.playEvent.groupBy({
+    by: ["artistId", "artistName"],
+    where: { userId, playedAt: { gte: since } },
+    orderBy: { _count: { artistId: "desc" } },
+    take: 50,
+  });
+
+  res.json({ data: artists });
+});
+
+router.get("/top-albums-db", async (req: Request, res: Response) => {
+  const session = getSession(req);
+  const userId = session.userId!;
+
+  const days = Number(req.query.days ?? 28);
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+  const albums = await prisma.playEvent.groupBy({
+    by: ["albumId", "albumName", "albumImage"],
+    where: { userId, playedAt: { gte: since } },
+    orderBy: { _count: { albumId: "desc" } },
+    take: 20,
+  });
+
+  res.json({ data: albums });
+});
+
 router.get("/recently-played", async (req: Request, res: Response) => {
+
   const session = getSession(req);
   const userId = session.userId!;
 

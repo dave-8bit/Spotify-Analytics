@@ -51,3 +51,18 @@ export type Stats = {
   uniqueArtists: number;
 };
 
+export type DbTrack = {
+  trackId: string;
+  trackName: string;
+  artistName: string;
+  albumImage: string | null;
+  _count: { trackId: number };
+};
+
+export type DbArtist = {
+  artistId: string;
+  artistName: string;
+  _count: { artistId: number };
+};
+
+

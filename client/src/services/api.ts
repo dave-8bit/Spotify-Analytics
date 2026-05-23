@@ -3,12 +3,21 @@ import axios from "axios";
 import type {
   Album,
   Artist,
+  DbArtist,
+  DbTrack,
   RecentTrack,
   Stats,
   TimeRange,
   Track,
   User,
 } from "../types";
+
+
+
+
+
+
+
 
 export const api = axios.create({
   baseURL: "/api",
@@ -52,5 +61,23 @@ export async function getStats(): Promise<Stats> {
   const res = await api.get("/user/stats");
   return res.data;
 }
+
+export async function getTopTracksDb(days: number): Promise<DbTrack[]> {
+  const res = await api.get("/user/top-tracks-db", { params: { days } });
+  return res.data.data;
+}
+
+export async function getTopArtistsDb(
+  days: number
+): Promise<DbArtist[]> {
+  const res = await api.get("/user/top-artists-db", { params: { days } });
+  return res.data.data;
+}
+
+export async function getTopAlbumsDb(days: number): Promise<Album[]> {
+  const res = await api.get("/user/top-albums-db", { params: { days } });
+  return res.data.data;
+}
+
 
 
