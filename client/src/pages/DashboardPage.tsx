@@ -1,4 +1,598 @@
+import { useEffect, useMemo, useState } from "react";
+
+import type {
+  Album,
+  Artist,
+  RecentTrack,
+  Stats,
+  TimeRange,
+  Track,
+  User,
+} from "../types";
+import {
+  getMe,
+  getTopAlbums,
+  getTopArtists,
+  getTopTracks,
+  getRecentlyPlayed,
+  getStats,
+  triggerSync,
+} from "../services/api";
+
+type TabKey = "tracks" | "artists" | "albums" | "recent";
+
+type TimeRangeOption = {
+  label: string;
+  value: TimeRange;
+};
+
+function formatDurationMs(ms: number) {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatMinutesAgo(playedAt: string) {
+  const playedTime = new Date(playedAt);
+  const now = new Date();
+  const diffMs = now.getTime() - playedTime.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (Number.isNaN(diffMins)) return playedTime.toLocaleDateString();
+  if (diffMins < 60) return `${diffMins} mins ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  return playedTime.toLocaleDateString();
+}
+
+function glassCardStyle() {
+  return {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.1)",
+    borderRadius: 12,
+  } as const;
+}
+
 export default function DashboardPage() {
-  return null;
+  const [user, setUser] = useState<User | null>(null);
+  const [tracks, setTracks] = useState<Track[]>([]);
+  const [artists, setArtists] = useState<Artist[]>([]);
+  const [albums, setAlbums] = useState<Album[]>([]);
+  const [recentTracks, setRecentTracks] = useState<RecentTrack[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
+
+  const [timeRange, setTimeRange] = useState<TimeRange>("medium_term");
+  const [loading, setLoading] = useState<boolean>(true);
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("tracks");
+
+  const timeRangeOptions: TimeRangeOption[] = useMemo(
+    () => [
+      { label: "3 Days", value: "short_term" },
+      { label: "4 Weeks", value: "short_term" },
+      { label: "3 Months", value: "medium_term" },
+      { label: "6 Months", value: "medium_term" },
+      { label: "All Time", value: "long_term" },
+    ],
+    []
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const [me, topTracks, topArtists, topAlbums, recentlyPlayed, s] =
+          await Promise.all([
+            getMe(),
+            getTopTracks(timeRange),
+            getTopArtists(timeRange),
+            getTopAlbums(),
+            getRecentlyPlayed(),
+            getStats(),
+          ]);
+
+        if (cancelled) return;
+        setUser(me);
+        setTracks(topTracks);
+        setArtists(topArtists);
+        setAlbums(topAlbums);
+        setRecentTracks(recentlyPlayed);
+        setStats(s);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [timeRange]);
+
+  const refetchAll = async () => {
+    const [me, topTracks, topArtists, topAlbums, recentlyPlayed, s] =
+      await Promise.all([
+        getMe(),
+        getTopTracks(timeRange),
+        getTopArtists(timeRange),
+        getTopAlbums(),
+        getRecentlyPlayed(),
+        getStats(),
+      ]);
+
+    setUser(me);
+    setTracks(topTracks);
+    setArtists(topArtists);
+    setAlbums(topAlbums);
+    setRecentTracks(recentlyPlayed);
+    setStats(s);
+  };
+
+  const onSyncNow = async () => {
+    try {
+      setSyncing(true);
+      await triggerSync();
+      await refetchAll();
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#0a0a0a",
+        color: "#fff",
+        padding: 20,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <div
+            style={{
+              fontSize: 26,
+              fontWeight: 900,
+              letterSpacing: -0.6,
+              color: "#1DB954",
+            }}
+          >
+            Wrapped365
+          </div>
+          <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 13 }}>
+            Your music story, updated every play
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontWeight: 700, fontSize: 14 }}>
+              {user?.displayName ?? ""}
+            </div>
+          </div>
+
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 999,
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              overflow: "hidden",
+              flex: "0 0 auto",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {user?.imageUrl ? (
+              <img
+                src={user.imageUrl}
+                alt="User avatar"
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
+            ) : (
+              <span style={{ color: "rgba(255,255,255,0.6)" }}>👤</span>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={onSyncNow}
+            disabled={syncing}
+            style={{
+              cursor: syncing ? "not-allowed" : "pointer",
+              padding: "10px 14px",
+              borderRadius: 12,
+              border: "1px solid rgba(29,185,84,0.35)",
+              background: syncing ? "rgba(29,185,84,0.25)" : "#1DB954",
+              color: syncing ? "rgba(255,255,255,0.9)" : "#071309",
+              fontWeight: 900,
+            }}
+          >
+            {syncing ? "Syncing..." : "Sync Now"}
+          </button>
+        </div>
+      </div>
+
+      {/* Stats bar */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        {[
+          {
+            label: "Total Plays",
+            value: stats?.totalPlays ?? 0,
+          },
+          {
+            label: "Total Minutes",
+            value: stats ? Math.round(stats.totalMinutes) : 0,
+          },
+          {
+            label: "Unique Tracks",
+            value: stats?.uniqueTracks ?? 0,
+          },
+          {
+            label: "Unique Artists",
+            value: stats?.uniqueArtists ?? 0,
+          },
+        ].map((c, idx) => (
+          <div
+            key={idx}
+            style={{
+              ...glassCardStyle(),
+              padding: 14,
+              minHeight: 72,
+            }}
+          >
+            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>
+              {c.label}
+            </div>
+            <div style={{ fontSize: 20, fontWeight: 900, marginTop: 6 }}>
+              {c.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Time range selector */}
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
+        {timeRangeOptions.map((opt) => {
+          const isActive = opt.value === timeRange;
+          return (
+            <button
+              key={opt.label}
+              type="button"
+              onClick={() => setTimeRange(opt.value)}
+              style={{
+                cursor: "pointer",
+                padding: "10px 12px",
+                borderRadius: 12,
+                border: isActive
+                  ? "1px solid rgba(29,185,84,0.65)"
+                  : "1px solid rgba(255,255,255,0.1)",
+                background: isActive
+                  ? "rgba(29,185,84,0.22)"
+                  : "rgba(255,255,255,0.04)",
+                color: isActive ? "#1DB954" : "rgba(255,255,255,0.85)",
+                fontWeight: 900,
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {[
+            { key: "tracks" as const, label: "Top Tracks" },
+            { key: "artists" as const, label: "Top Artists" },
+            { key: "albums" as const, label: "Top Albums" },
+            { key: "recent" as const, label: "Recently Played" },
+          ].map((t) => {
+            const isActive = activeTab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setActiveTab(t.key)}
+                style={{
+                  cursor: "pointer",
+                  padding: "10px 12px",
+                  borderRadius: 12,
+                  border: isActive
+                    ? "1px solid rgba(29,185,84,0.65)"
+                    : "1px solid rgba(255,255,255,0.1)",
+                  background: isActive
+                    ? "rgba(29,185,84,0.22)"
+                    : "rgba(255,255,255,0.04)",
+                  color: isActive ? "#1DB954" : "rgba(255,255,255,0.85)",
+                  fontWeight: 900,
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ color: "rgba(255,255,255,0.75)", textAlign: "center" }}>
+          Loading...
+        </div>
+      ) : (
+        <div>
+          {activeTab === "tracks" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {tracks.map((t, idx) => (
+                <div
+                  key={t.id}
+                  style={{
+                    ...glassCardStyle(),
+                    padding: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      flex: "0 0 auto",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {t.album.images[0]?.url ? (
+                      <img
+                        src={t.album.images[0].url}
+                        alt={t.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.5)" }}>
+                        🎵
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 10,
+                      }}
+                    >
+                      <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+                        #{idx + 1}
+                      </div>
+                      <div style={{ fontWeight: 900, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {t.name}
+                      </div>
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
+                      {t.artists[0]?.name ?? ""}
+                    </div>
+                  </div>
+
+                  <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
+                    {formatDurationMs(t.duration_ms)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === "artists" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              {artists.map((a) => (
+                <div
+                  key={a.id}
+                  style={{
+                    ...glassCardStyle(),
+                    padding: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    minHeight: 170,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 999,
+                      overflow: "hidden",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "rgba(255,255,255,0.04)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {a.images[0]?.url ? (
+                      <img
+                        src={a.images[0].url}
+                        alt={a.name}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.5)" }}>🎤</span>
+                    )}
+                  </div>
+
+                  <div style={{ fontWeight: 900 }}>{a.name}</div>
+                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                    Top genre: {a.genres[0] ?? "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === "albums" && (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              {albums.map((al) => (
+                <div
+                  key={al.albumId}
+                  style={{
+                    ...glassCardStyle(),
+                    padding: 12,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 10,
+                    minHeight: 190,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 80,
+                      height: 80,
+                      borderRadius: 14,
+                      overflow: "hidden",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {al.albumImage ? (
+                      <img
+                        src={al.albumImage}
+                        alt={al.albumName}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.5)" }}>💿</span>
+                    )}
+                  </div>
+
+                  <div style={{ fontWeight: 900, fontSize: 14 }}>{al.albumName}</div>
+                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                    Plays: {al._count.albumId}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeTab === "recent" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {recentTracks.map((r) => (
+                <div
+                  key={r.id}
+                  style={{
+                    ...glassCardStyle(),
+                    padding: 12,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 50,
+                      height: 50,
+                      borderRadius: 10,
+                      overflow: "hidden",
+                      background: "rgba(255,255,255,0.04)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      flex: "0 0 auto",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {r.albumImage ? (
+                      <img
+                        src={r.albumImage}
+                        alt={r.trackName}
+                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <span style={{ color: "rgba(255,255,255,0.5)" }}>🎵</span>
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontWeight: 900,
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {r.trackName}
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
+                      {r.artistName}
+                    </div>
+                  </div>
+
+                  <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800, fontSize: 13 }}>
+                    {formatMinutesAgo(r.playedAt)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
