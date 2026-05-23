@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   Album,
   Artist,
+  DbArtist,
+  DbTrack,
   RecentTrack,
   Stats,
   TimeRange,
@@ -11,19 +13,24 @@ import type {
 } from "../types";
 import {
   getMe,
-  getTopAlbums,
-  getTopArtists,
-  getTopTracks,
   getRecentlyPlayed,
   getStats,
+  getTopAlbums,
+  getTopAlbumsDb,
+  getTopArtists,
+  getTopArtistsDb,
+  getTopTracks,
+  getTopTracksDb,
   triggerSync,
 } from "../services/api";
 
 type TabKey = "tracks" | "artists" | "albums" | "recent";
 
-type TimeRangeOption = {
+type RangeOption = {
   label: string;
-  value: TimeRange;
+  source: "db" | "spotify";
+  days?: number;
+  spotifyRange?: TimeRange;
 };
 
 function formatDurationMs(ms: number) {
@@ -53,6 +60,8 @@ function glassCardStyle() {
   } as const;
 }
 
+
+
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -61,21 +70,41 @@ export default function DashboardPage() {
   const [recentTracks, setRecentTracks] = useState<RecentTrack[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
 
-  const [timeRange, setTimeRange] = useState<TimeRange>("medium_term");
+  const rangeOptions: RangeOption[] = useMemo(
+    () => [
+      { label: "3 Days", source: "db", days: 3 },
+      { label: "4 Weeks", source: "db", days: 28 },
+      { label: "3 Months", source: "spotify", spotifyRange: "medium_term" },
+      { label: "6 Months", source: "db", days: 180 },
+      { label: "All Time", source: "spotify", spotifyRange: "long_term" },
+    ],
+    []
+  );
+
+  const initialSelectedRange = useMemo(
+    () => rangeOptions.find((o) => o.label === "3 Months") ?? rangeOptions[0],
+    [rangeOptions]
+  );
+
+  const [selectedRange, setSelectedRange] = useState<RangeOption>(
+    initialSelectedRange
+  );
+
+  const dataSource = selectedRange.source;
+
   const [loading, setLoading] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<TabKey>("tracks");
 
-  const timeRangeOptions: TimeRangeOption[] = useMemo(
-    () => [
-      { label: "3 Days", value: "short_term" },
-      { label: "4 Weeks", value: "short_term" },
-      { label: "3 Months", value: "medium_term" },
-      { label: "6 Months", value: "medium_term" },
-      { label: "All Time", value: "long_term" },
-    ],
-    []
-  );
+  const [dbTracks, setDbTracks] = useState<DbTrack[]>([]);
+  const [dbArtists, setDbArtists] = useState<DbArtist[]>([]);
+
+  useEffect(() => {
+    // keep dataSource and selectedRange in sync
+    if (selectedRange.source !== dataSource) {
+      // no-op; selectedRange drives dataSource
+    }
+  }, [dataSource, selectedRange.source]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,23 +112,57 @@ export default function DashboardPage() {
     (async () => {
       setLoading(true);
       try {
-        const [me, topTracks, topArtists, topAlbums, recentlyPlayed, s] =
+        const mePromise = getMe();
+        const statsPromise = getStats();
+        const recentPromise = getRecentlyPlayed();
+
+        const topAlbumsPromise =
+          selectedRange.source === "db"
+            ? getTopAlbumsDb(selectedRange.days ?? 28)
+            : getTopAlbums();
+
+        const [topTracksResult, topArtistsResult] =
+          selectedRange.source === "db"
+            ? [
+                getTopTracksDb(selectedRange.days ?? 28),
+                getTopArtistsDb(selectedRange.days ?? 28),
+              ]
+            : [
+                getTopTracks(selectedRange.spotifyRange ?? "medium_term"),
+                getTopArtists(selectedRange.spotifyRange ?? "medium_term"),
+              ];
+
+        const [me, albumsResult, recentlyPlayedResult, statsResult] =
           await Promise.all([
-            getMe(),
-            getTopTracks(timeRange),
-            getTopArtists(timeRange),
-            getTopAlbums(),
-            getRecentlyPlayed(),
-            getStats(),
+            mePromise,
+            topAlbumsPromise,
+            recentPromise,
+            statsPromise,
           ]);
 
+        const [topTracksData, topArtistsData] = await Promise.all([
+          topTracksResult,
+          topArtistsResult,
+        ]);
+
         if (cancelled) return;
+
         setUser(me);
-        setTracks(topTracks);
-        setArtists(topArtists);
-        setAlbums(topAlbums);
-        setRecentTracks(recentlyPlayed);
-        setStats(s);
+        setAlbums(albumsResult);
+        setRecentTracks(recentlyPlayedResult);
+        setStats(statsResult);
+
+        if (selectedRange.source === "db") {
+          setDbTracks(topTracksData as DbTrack[]);
+          setDbArtists(topArtistsData as DbArtist[]);
+          setTracks([]);
+          setArtists([]);
+        } else {
+          setTracks(topTracksData as Track[]);
+          setArtists(topArtistsData as Artist[]);
+          setDbTracks([]);
+          setDbArtists([]);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -108,25 +171,54 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [timeRange]);
+  }, [selectedRange]);
 
   const refetchAll = async () => {
-    const [me, topTracks, topArtists, topAlbums, recentlyPlayed, s] =
+    const mePromise = getMe();
+    const statsPromise = getStats();
+    const recentPromise = getRecentlyPlayed();
+
+    const topAlbumsPromise =
+      selectedRange.source === "db"
+        ? getTopAlbumsDb(selectedRange.days ?? 28)
+        : getTopAlbums();
+
+    const topTracksPromise =
+      selectedRange.source === "db"
+        ? getTopTracksDb(selectedRange.days ?? 28)
+        : getTopTracks(selectedRange.spotifyRange ?? "medium_term");
+
+    const topArtistsPromise =
+      selectedRange.source === "db"
+        ? getTopArtistsDb(selectedRange.days ?? 28)
+        : getTopArtists(selectedRange.spotifyRange ?? "medium_term");
+
+    const [me, albumsResult, recentlyPlayedResult, statsResult, topTracksData, topArtistsData] =
       await Promise.all([
-        getMe(),
-        getTopTracks(timeRange),
-        getTopArtists(timeRange),
-        getTopAlbums(),
-        getRecentlyPlayed(),
-        getStats(),
+        mePromise,
+        topAlbumsPromise,
+        recentPromise,
+        statsPromise,
+        topTracksPromise,
+        topArtistsPromise,
       ]);
 
     setUser(me);
-    setTracks(topTracks);
-    setArtists(topArtists);
-    setAlbums(topAlbums);
-    setRecentTracks(recentlyPlayed);
-    setStats(s);
+    setAlbums(albumsResult);
+    setRecentTracks(recentlyPlayedResult);
+    setStats(statsResult);
+
+    if (selectedRange.source === "db") {
+      setDbTracks(topTracksData as DbTrack[]);
+      setDbArtists(topArtistsData as DbArtist[]);
+      setTracks([]);
+      setArtists([]);
+    } else {
+      setTracks(topTracksData as Track[]);
+      setArtists(topArtistsData as Artist[]);
+      setDbTracks([]);
+      setDbArtists([]);
+    }
   };
 
   const onSyncNow = async () => {
@@ -285,13 +377,13 @@ export default function DashboardPage() {
           marginBottom: 16,
         }}
       >
-        {timeRangeOptions.map((opt) => {
-          const isActive = opt.value === timeRange;
+        {rangeOptions.map((opt) => {
+          const isActive = opt.label === selectedRange.label;
           return (
             <button
               key={opt.label}
               type="button"
-              onClick={() => setTimeRange(opt.value)}
+              onClick={() => setSelectedRange(opt)}
               style={{
                 cursor: "pointer",
                 padding: "10px 12px",
@@ -357,69 +449,147 @@ export default function DashboardPage() {
         <div>
           {activeTab === "tracks" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {tracks.map((t, idx) => (
-                <div
-                  key={t.id}
-                  style={{
-                    ...glassCardStyle(),
-                    padding: 12,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 12,
-                  }}
-                >
+              {dataSource === "db" &&
+                dbTracks.map((t, idx) => (
                   <div
+                    key={t.trackId}
                     style={{
-                      width: 50,
-                      height: 50,
-                      borderRadius: 10,
-                      overflow: "hidden",
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      flex: "0 0 auto",
+                      ...glassCardStyle(),
+                      padding: 12,
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
+                      gap: 12,
                     }}
                   >
-                    {t.album.images[0]?.url ? (
-                      <img
-                        src={t.album.images[0].url}
-                        alt={t.name}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    ) : (
-                      <span style={{ color: "rgba(255,255,255,0.5)" }}>
-                        🎵
-                      </span>
-                    )}
-                  </div>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div
                       style={{
+                        width: 50,
+                        height: 50,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        flex: "0 0 auto",
                         display: "flex",
-                        alignItems: "baseline",
-                        gap: 10,
+                        alignItems: "center",
+                        justifyContent: "center",
                       }}
                     >
-                      <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
-                        #{idx + 1}
-                      </div>
-                      <div style={{ fontWeight: 900, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {t.name}
-                      </div>
+                      {t.albumImage ? (
+                        <img
+                          src={t.albumImage}
+                          alt={t.trackName}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ color: "rgba(255,255,255,0.5)" }}>🎵</span>
+                      )}
                     </div>
-                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
-                      {t.artists[0]?.name ?? ""}
-                    </div>
-                  </div>
 
-                  <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
-                    {formatDurationMs(t.duration_ms)}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+                          #{idx + 1}
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            fontSize: 14,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {t.trackName}
+                        </div>
+                      </div>
+                      <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
+                        {t.artistName}
+                      </div>
+                    </div>
+
+                    <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
+                      {t._count.trackId}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+
+              {dataSource === "spotify" &&
+                tracks.map((t, idx) => (
+                  <div
+                    key={t.id}
+                    style={{
+                      ...glassCardStyle(),
+                      padding: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 50,
+                        height: 50,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        flex: "0 0 auto",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {t.album.images[0]?.url ? (
+                        <img
+                          src={t.album.images[0].url}
+                          alt={t.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ color: "rgba(255,255,255,0.5)" }}>🎵</span>
+                      )}
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "baseline",
+                          gap: 10,
+                        }}
+                      >
+                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+                          #{idx + 1}
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: 900,
+                            fontSize: 14,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {t.name}
+                        </div>
+                      </div>
+                      <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
+                        {t.artists[0]?.name ?? ""}
+                      </div>
+                    </div>
+
+                    <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
+                      {formatDurationMs(t.duration_ms)}
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
 
@@ -431,48 +601,85 @@ export default function DashboardPage() {
                 gap: 12,
               }}
             >
-              {artists.map((a) => (
-                <div
-                  key={a.id}
-                  style={{
-                    ...glassCardStyle(),
-                    padding: 12,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                    minHeight: 170,
-                  }}
-                >
+              {dataSource === "db" &&
+                dbArtists.map((a) => (
                   <div
+                    key={a.artistId}
                     style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: 999,
-                      overflow: "hidden",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      background: "rgba(255,255,255,0.04)",
+                      ...glassCardStyle(),
+                      padding: 12,
                       display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      flexDirection: "column",
+                      gap: 10,
+                      minHeight: 170,
                     }}
                   >
-                    {a.images[0]?.url ? (
-                      <img
-                        src={a.images[0].url}
-                        alt={a.name}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                    ) : (
+                    <div
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 999,
+                        overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "rgba(255,255,255,0.04)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
                       <span style={{ color: "rgba(255,255,255,0.5)" }}>🎤</span>
-                    )}
-                  </div>
+                    </div>
 
-                  <div style={{ fontWeight: 900 }}>{a.name}</div>
-                  <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                    Top genre: {a.genres[0] ?? "—"}
+                    <div style={{ fontWeight: 900 }}>{a.artistName}</div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                      Plays: {a._count.artistId}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+
+              {dataSource === "spotify" &&
+                artists.map((a) => (
+                  <div
+                    key={a.id}
+                    style={{
+                      ...glassCardStyle(),
+                      padding: 12,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 10,
+                      minHeight: 170,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 80,
+                        height: 80,
+                        borderRadius: 999,
+                        overflow: "hidden",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        background: "rgba(255,255,255,0.04)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      {a.images[0]?.url ? (
+                        <img
+                          src={a.images[0].url}
+                          alt={a.name}
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <span style={{ color: "rgba(255,255,255,0.5)" }}>🎤</span>
+                      )}
+                    </div>
+
+                    <div style={{ fontWeight: 900 }}>{a.name}</div>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                      Top genre: {a.genres[0] ?? "—"}
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
 
