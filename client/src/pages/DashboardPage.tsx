@@ -120,33 +120,30 @@ export default function DashboardPage() {
         const statsPromise = getStats();
         const recentPromise = getRecentlyPlayed();
 
-        const topAlbumsPromise =
-          selectedRange.source === "db"
-            ? getTopAlbumsDb(selectedRange.days ?? 28)
-            : getTopAlbums();
+        let topTracksData: Track[] | DbTrack[];
+        let topArtistsData: Artist[] | DbArtist[];
+        let albumsResult: Album[];
 
-        const [topTracksResult, topArtistsResult] =
-          selectedRange.source === "db"
-            ? [
-                getTopTracksDb(selectedRange.days ?? 28),
-                getTopArtistsDb(selectedRange.days ?? 28),
-              ]
-            : [
-                getTopTracks(selectedRange.spotifyRange ?? "medium_term"),
-                getTopArtists(selectedRange.spotifyRange ?? "medium_term"),
-              ];
-
-        const [me, albumsResult, recentlyPlayedResult, statsResult] =
-          await Promise.all([
-            mePromise,
-            topAlbumsPromise,
-            recentPromise,
-            statsPromise,
+        if (selectedRange.source === "db") {
+          const days = selectedRange.days ?? 28;
+          [topTracksData, topArtistsData, albumsResult] = await Promise.all([
+            getTopTracksDb(days),
+            getTopArtistsDb(days),
+            getTopAlbumsDb(days),
           ]);
+        } else {
+          const spotifyRange = selectedRange.spotifyRange ?? "medium_term";
+          [topTracksData, topArtistsData, albumsResult] = await Promise.all([
+            getTopTracks(spotifyRange),
+            getTopArtists(spotifyRange),
+            getTopAlbums(),
+          ]);
+        }
 
-        const [topTracksData, topArtistsData] = await Promise.all([
-          topTracksResult,
-          topArtistsResult,
+        const [me, recentlyPlayedResult, statsResult] = await Promise.all([
+          mePromise,
+          recentPromise,
+          statsPromise,
         ]);
 
         if (cancelled) return;
@@ -182,30 +179,31 @@ export default function DashboardPage() {
     const statsPromise = getStats();
     const recentPromise = getRecentlyPlayed();
 
-    const topAlbumsPromise =
-      selectedRange.source === "db"
-        ? getTopAlbumsDb(selectedRange.days ?? 28)
-        : getTopAlbums();
+    let topTracksData: Track[] | DbTrack[];
+    let topArtistsData: Artist[] | DbArtist[];
+    let albumsResult: Album[];
 
-    const topTracksPromise =
-      selectedRange.source === "db"
-        ? getTopTracksDb(selectedRange.days ?? 28)
-        : getTopTracks(selectedRange.spotifyRange ?? "medium_term");
-
-    const topArtistsPromise =
-      selectedRange.source === "db"
-        ? getTopArtistsDb(selectedRange.days ?? 28)
-        : getTopArtists(selectedRange.spotifyRange ?? "medium_term");
-
-    const [me, albumsResult, recentlyPlayedResult, statsResult, topTracksData, topArtistsData] =
-      await Promise.all([
-        mePromise,
-        topAlbumsPromise,
-        recentPromise,
-        statsPromise,
-        topTracksPromise,
-        topArtistsPromise,
+    if (selectedRange.source === "db") {
+      const days = selectedRange.days ?? 28;
+      [topTracksData, topArtistsData, albumsResult] = await Promise.all([
+        getTopTracksDb(days),
+        getTopArtistsDb(days),
+        getTopAlbumsDb(days),
       ]);
+    } else {
+      const spotifyRange = selectedRange.spotifyRange ?? "medium_term";
+      [topTracksData, topArtistsData, albumsResult] = await Promise.all([
+        getTopTracks(spotifyRange),
+        getTopArtists(spotifyRange),
+        getTopAlbums(),
+      ]);
+    }
+
+    const [me, recentlyPlayedResult, statsResult] = await Promise.all([
+      mePromise,
+      recentPromise,
+      statsPromise,
+    ]);
 
     setUser(me);
     setAlbums(albumsResult);
