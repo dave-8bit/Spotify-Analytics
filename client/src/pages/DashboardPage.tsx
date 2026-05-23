@@ -110,6 +110,10 @@ export default function DashboardPage() {
     let cancelled = false;
 
     (async () => {
+      setDbTracks([]);
+      setDbArtists([]);
+      setTracks([]);
+      setArtists([]);
       setLoading(true);
       try {
         const mePromise = getMe();
@@ -450,7 +454,7 @@ export default function DashboardPage() {
           {activeTab === "tracks" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {dataSource === "db" &&
-                dbTracks.map((t, idx) => (
+                dbTracks.filter((t): t is DbTrack => t != null && typeof t.trackId === "string").map((t, idx) => (
                   <div
                     key={t.trackId}
                     style={{
@@ -602,7 +606,7 @@ export default function DashboardPage() {
               }}
             >
               {dataSource === "db" &&
-                dbArtists.map((a) => (
+                dbArtists.filter((a): a is DbArtist => a != null && typeof a.artistId === "string").map((a) => (
                   <div
                     key={a.artistId}
                     style={{
@@ -802,4 +806,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

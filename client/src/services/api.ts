@@ -22,7 +22,12 @@ import type {
 export const api = axios.create({
   baseURL: "/api",
   withCredentials: true,
+  headers: {
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+  },
 });
+
 
 export async function getMe(): Promise<User> {
   const res = await axios.get("/auth/me", { withCredentials: true });
