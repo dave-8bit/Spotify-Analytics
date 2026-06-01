@@ -517,8 +517,9 @@ export default function DashboardPage() {
                     </div>
 
                     <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
-                      {t._count.trackId}
+                      {t._count?.trackId ?? 0}
                     </div>
+
                   </div>
                 ))}
 
@@ -634,7 +635,7 @@ export default function DashboardPage() {
 
                     <div style={{ fontWeight: 900 }}>{a.artistName}</div>
                     <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                      Plays: {a._count.artistId}
+                      Plays: {a._count?.artistId ?? 0}
                     </div>
                   </div>
                 ))}
@@ -731,7 +732,7 @@ export default function DashboardPage() {
 
                   <div style={{ fontWeight: 900, fontSize: 14 }}>{al.albumName}</div>
                   <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                    Plays: {al._count.albumId}
+                    Plays: {al._count?.albumId ?? 0}
                   </div>
                 </div>
               ))}
