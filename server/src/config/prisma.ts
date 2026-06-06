@@ -38,12 +38,28 @@ export const connectPrisma = async (): Promise<void> => {
 };
 
 export const disconnectPrisma = async (): Promise<void> => {
+  // Best-effort: disconnect may be called during ts-node-dev respawns even if connect failed.
+  // We avoid crashing the process if disconnect fails.
   try {
+    // NOTE: Accessing internal Prisma engine state is undocumented; if it's not available,
+    // we just attempt $disconnect anyway (best-effort).
+    const isConnected = Boolean(
+      (prisma as { _engine?: { isConnected?: boolean } })._engine?.isConnected
+    );
+
+    if (isConnected) {
+      await prisma.$disconnect();
+      return;
+    }
+
+    // If we can't determine connection state, attempt disconnect silently.
     await prisma.$disconnect();
   } catch (error) {
     console.error(error);
   }
 };
+
+
 
 
 
