@@ -56,6 +56,7 @@ router.get("/top-albums", async (req: Request, res: Response) => {
     where: { userId },
     orderBy: { _count: { albumId: "desc" } },
     take: 20,
+    _sum: { durationMs: true },
   });
 
   res.json({ data: albums });
@@ -73,6 +74,7 @@ router.get("/top-tracks-db", async (req: Request, res: Response) => {
     where: { userId, playedAt: { gte: since } },
     orderBy: { _count: { trackId: "desc" } },
     take: 50,
+    _sum: { durationMs: true },
   });
 
   res.json({ data: tracks });
@@ -90,6 +92,7 @@ router.get("/top-artists-db", async (req: Request, res: Response) => {
     where: { userId, playedAt: { gte: since } },
     orderBy: { _count: { artistId: "desc" } },
     take: 50,
+    _sum: { durationMs: true },
   });
 
   res.json({ data: artists });
@@ -107,6 +110,7 @@ router.get("/top-albums-db", async (req: Request, res: Response) => {
     where: { userId, playedAt: { gte: since } },
     orderBy: { _count: { albumId: "desc" } },
     take: 20,
+    _sum: { durationMs: true },
   });
 
   res.json({ data: albums });

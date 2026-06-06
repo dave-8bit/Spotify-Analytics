@@ -57,12 +57,25 @@ export type DbTrack = {
   artistName: string;
   albumImage: string | null;
   _count: { trackId: number };
+  _sum?: { durationMs?: number | null };
 };
 
 export type DbArtist = {
   artistId: string;
   artistName: string;
   _count: { artistId: number };
+  _sum?: { durationMs?: number | null };
 };
+
+export type DbAlbum = {
+  albumId: string;
+  albumName: string;
+  albumImage: string | null;
+  _count: { albumId: number };
+  _sum?: { durationMs?: number | null };
+};
+
+
+
 
 

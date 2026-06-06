@@ -60,8 +60,6 @@ function glassCardStyle() {
   } as const;
 }
 
-
-
 export default function DashboardPage() {
   const [user, setUser] = useState<User | null>(null);
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -452,76 +450,90 @@ export default function DashboardPage() {
           {activeTab === "tracks" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {dataSource === "db" &&
-                dbTracks.filter((t): t is DbTrack => t != null && typeof t.trackId === "string").map((t, idx) => (
-                  <div
-                    key={t.trackId}
-                    style={{
-                      ...glassCardStyle(),
-                      padding: 12,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                    }}
-                  >
+                dbTracks
+                  .filter(
+                    (t): t is DbTrack =>
+                      t != null && typeof t.trackId === "string"
+                  )
+                  .map((t, idx) => (
                     <div
+                      key={t.trackId}
                       style={{
-                        width: 50,
-                        height: 50,
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        flex: "0 0 auto",
+                        ...glassCardStyle(),
+                        padding: 12,
                         display: "flex",
                         alignItems: "center",
-                        justifyContent: "center",
+                        gap: 12,
                       }}
                     >
-                      {t.albumImage ? (
-                        <img
-                          src={t.albumImage}
-                          alt={t.trackName}
-                          style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <span style={{ color: "rgba(255,255,255,0.5)" }}>🎵</span>
-                      )}
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div
                         style={{
+                          width: 50,
+                          height: 50,
+                          borderRadius: 10,
+                          overflow: "hidden",
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          flex: "0 0 auto",
                           display: "flex",
-                          alignItems: "baseline",
-                          gap: 10,
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
-                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
-                          #{idx + 1}
-                        </div>
+                        {t.albumImage ? (
+                          <img
+                            src={t.albumImage}
+                            alt={t.trackName}
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <span style={{ color: "rgba(255,255,255,0.5)" }}>🎵</span>
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
                         <div
                           style={{
-                            fontWeight: 900,
-                            fontSize: 14,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
+                            display: "flex",
+                            alignItems: "baseline",
+                            gap: 10,
                           }}
                         >
-                          {t.trackName}
+                          <div
+                            style={{
+                              color: "rgba(255,255,255,0.55)",
+                              fontSize: 12,
+                            }}
+                          >
+                            #{idx + 1}
+                          </div>
+                          <div
+                            style={{
+                              fontWeight: 900,
+                              fontSize: 14,
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                            }}
+                          >
+                            {t.trackName}
+                          </div>
+                        </div>
+                        <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
+                          {t.artistName}
                         </div>
                       </div>
-                      <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13, marginTop: 4 }}>
-                        {t.artistName}
+
+                      <div
+                        style={{
+                          color: "rgba(255,255,255,0.75)",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {t._count?.trackId ?? 0}
                       </div>
                     </div>
-
-                    <div style={{ color: "rgba(255,255,255,0.75)", fontWeight: 800 }}>
-                      {t._count?.trackId ?? 0}
-                    </div>
-
-                  </div>
-                ))}
+                  ))}
 
               {dataSource === "spotify" &&
                 tracks.map((t, idx) => (
@@ -568,7 +580,12 @@ export default function DashboardPage() {
                           gap: 10,
                         }}
                       >
-                        <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>
+                        <div
+                          style={{
+                            color: "rgba(255,255,255,0.55)",
+                            fontSize: 12,
+                          }}
+                        >
                           #{idx + 1}
                         </div>
                         <div
@@ -605,40 +622,45 @@ export default function DashboardPage() {
               }}
             >
               {dataSource === "db" &&
-                dbArtists.filter((a): a is DbArtist => a != null && typeof a.artistId === "string").map((a) => (
-                  <div
-                    key={a.artistId}
-                    style={{
-                      ...glassCardStyle(),
-                      padding: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 10,
-                      minHeight: 170,
-                    }}
-                  >
+                dbArtists
+                  .filter(
+                    (a): a is DbArtist =>
+                      a != null && typeof a.artistId === "string"
+                  )
+                  .map((a) => (
                     <div
+                      key={a.artistId}
                       style={{
-                        width: 80,
-                        height: 80,
-                        borderRadius: 999,
-                        overflow: "hidden",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        background: "rgba(255,255,255,0.04)",
+                        ...glassCardStyle(),
+                        padding: 12,
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
+                        flexDirection: "column",
+                        gap: 10,
+                        minHeight: 170,
                       }}
                     >
-                      <span style={{ color: "rgba(255,255,255,0.5)" }}>🎤</span>
-                    </div>
+                      <div
+                        style={{
+                          width: 80,
+                          height: 80,
+                          borderRadius: 999,
+                          overflow: "hidden",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          background: "rgba(255,255,255,0.04)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <span style={{ color: "rgba(255,255,255,0.5)" }}>🎤</span>
+                      </div>
 
-                    <div style={{ fontWeight: 900 }}>{a.artistName}</div>
-                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
-                      Plays: {a._count?.artistId ?? 0}
+                      <div style={{ fontWeight: 900 }}>{a.artistName}</div>
+                      <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 13 }}>
+                        Plays: {a._count?.artistId ?? 0}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
               {dataSource === "spotify" &&
                 artists.map((a) => (
@@ -805,3 +827,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
