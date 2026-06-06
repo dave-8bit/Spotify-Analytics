@@ -49,5 +49,16 @@ const shutdown = async () => {
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
 
+// In dev, ts-node-dev respawns; ensure prisma disconnect runs on unexpected failures too.
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection", reason);
+  void shutdown();
+});
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException", err);
+  void shutdown();
+});
+
 void startServer();
+
 
