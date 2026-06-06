@@ -27,34 +27,23 @@ if (process.env.NODE_ENV !== "production") {
 
 export default prisma;
 
-let isConnecting = false;
-let hasConnected = false;
-
 export const connectPrisma = async (): Promise<void> => {
-  // ts-node-dev can respawn; avoid hammering $connect and exhausting the pool.
-  if (hasConnected || isConnecting) return;
-
-  isConnecting = true;
   try {
     await prisma.$connect();
-    hasConnected = true;
     console.log("Connected to PostgreSQL via Prisma");
   } catch (error) {
     console.error(error);
     process.exit(1);
-  } finally {
-    isConnecting = false;
   }
 };
 
 export const disconnectPrisma = async (): Promise<void> => {
   try {
-    // $disconnect is best-effort; ts-node-dev respawns often.
     await prisma.$disconnect();
-    hasConnected = false;
   } catch (error) {
     console.error(error);
   }
 };
+
 
 
