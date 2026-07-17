@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import prisma from "../config/prisma";
 import { requireAuth, getSession } from "../middleware/auth";
 import { spotifyGet } from "../services/spotifyService";
-import { triggerSync } from "../services/syncService";
+import { eventBus } from "../events/bus";
 import type { TimeRange } from "../types";
 
 const router = Router();
@@ -13,7 +13,7 @@ router.get("/sync", async (req: Request, res: Response) => {
   const session = getSession(req);
   const userId = session.userId!;
 
-  void triggerSync(userId);
+  eventBus.publish("sync.requested", { userId, reason: "manual" });
   res.json({ success: true });
 });
 

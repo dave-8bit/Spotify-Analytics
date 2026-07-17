@@ -13,20 +13,48 @@ model User {
   displayName    String?
   email          String?   @unique
   imageUrl       String?
+  // LEGACY token/sync columns: authoritative copy now lives on ProviderAccount
+  // (ARCHITECTURE.md §6.3). Kept mirrored through M2; dropped in a later milestone
+  // once no reader remains.
   accessToken    String?
   refreshToken   String?
   tokenExpiresAt DateTime?
   lastSyncedAt   DateTime?
   createdAt      DateTime  @default(now())
 
+  accounts       ProviderAccount[]
   playEvents     PlayEvent[]
   topSnapshots   TopSnapshot[]
+}
+
+// Per-provider link between a User and an external music service (ARCHITECTURE.md §6.2).
+// Credentials, sync cursor, and sync bookkeeping are per-account.
+model ProviderAccount {
+  id             Int       @id @default(autoincrement())
+  userId         Int
+  provider       String // "spotify" | "apple_music" | "lastfm" | …
+  providerUserId String // e.g. spotifyId
+  accessToken    String?
+  refreshToken   String?
+  tokenExpiresAt DateTime?
+  scopes         String?
+  historyCursor  String? // provider-native cursor (Spotify `after` ms timestamp)
+  lastSyncedAt   DateTime?
+  syncEnabled    Boolean   @default(true)
+  syncFailCount  Int       @default(0)
+  lastSyncError  String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@index([syncEnabled, lastSyncedAt]) // poller work-queue query (M3)
 }
 
 model PlayEvent {
   id         Int      @id @default(autoincrement())
   userId     Int
-  trackId    String
+  provider   String   @default("spotify") // canonical events carry their origin
+  trackId    String // provider-native id, namespaced by `provider`
   trackName  String
   artistId   String
   artistName String
@@ -38,7 +66,7 @@ model PlayEvent {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, playedAt])
+  @@unique([userId, provider, playedAt])
   @@index([userId, playedAt])
 }
 

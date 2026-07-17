@@ -3,7 +3,7 @@ import crypto from "crypto";
 import axios from "axios";
 import prisma from "../config/prisma";
 import { getSession } from "../middleware/auth";
-import { triggerSync } from "../services/syncService";
+import { eventBus } from "../events/bus";
 
 const router = Router();
 
@@ -129,6 +129,8 @@ router.get("/spotify/callback", async (req: Request, res: Response) => {
 
   const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
+  // User token columns stay mirrored through M2 (ARCHITECTURE.md §6.3);
+  // ProviderAccount below is the authoritative credential store.
   const user = await prisma.user.upsert({
     where: { spotifyId: spotifyUser.id },
     update: {
@@ -150,10 +152,36 @@ router.get("/spotify/callback", async (req: Request, res: Response) => {
     },
   });
 
+  await prisma.providerAccount.upsert({
+    where: {
+      provider_providerUserId: {
+        provider: "spotify",
+        providerUserId: spotifyUser.id,
+      },
+    },
+    update: {
+      accessToken,
+      refreshToken,
+      tokenExpiresAt,
+      scopes: SCOPES,
+      syncEnabled: true,
+      syncFailCount: 0,
+      lastSyncError: null,
+    },
+    create: {
+      userId: user.id,
+      provider: "spotify",
+      providerUserId: spotifyUser.id,
+      accessToken,
+      refreshToken,
+      tokenExpiresAt,
+      scopes: SCOPES,
+    },
+  });
+
   session.userId = user.id;
 
-  // Trigger sync in background (don't await).
-  void triggerSync(user.id);
+  eventBus.publish("sync.requested", { userId: user.id, reason: "login" });
 
   res.redirect(`${FRONTEND_URL}/dashboard`);
 });

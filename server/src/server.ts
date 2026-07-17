@@ -6,11 +6,14 @@ import app from "./app";
 import { validateEnv } from "./config/env";
 import { connectPrisma, disconnectPrisma } from "./config/prisma";
 import { closeSessionStore } from "./config/session";
+import { registerSyncSubscribers } from "./sync/syncService";
 
 export const startServer = async (): Promise<void> => {
   try {
     validateEnv();
     await connectPrisma();
+
+    registerSyncSubscribers();
 
     const port = process.env.PORT ? Number(process.env.PORT) : 5000;
 
