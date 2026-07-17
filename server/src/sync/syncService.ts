@@ -9,7 +9,7 @@ import prisma from "../config/prisma";
 import { eventBus } from "../events/bus";
 import { getAdapter } from "../ingestion/registry";
 import type { CanonicalPlayEvent } from "../ingestion/types";
-import { shouldDisableSync } from "./syncPolicy";
+import { noteSyncAttempt, shouldDisableSync } from "./syncPolicy";
 
 const log = (userId: number, message: string): void => {
   console.log(`[sync] userId=${userId} ${message}`);
@@ -131,59 +131,76 @@ const recordFailure = async (
   }
 };
 
+// Duplicate-sync guard (M3, ARCHITECTURE.md §4.2 dedup rules): the scheduler
+// and manual REST/Gateway requests may publish sync.requested for the same
+// user concurrently. Overlapping runs are skipped, not queued — history
+// polling repeats shortly anyway and upserts are idempotent.
+const inFlightUserIds = new Set<number>();
+
 // Run one history sync for every syncEnabled provider account of a user.
 export const syncUser = async (userId: number): Promise<void> => {
-  const accounts = await prisma.providerAccount.findMany({
-    where: { userId, syncEnabled: true },
-  });
-
-  if (!accounts.length) {
-    log(userId, "no sync-enabled provider accounts, skipping");
+  if (inFlightUserIds.has(userId)) {
+    log(userId, "sync already in flight, skipping duplicate run");
     return;
   }
+  inFlightUserIds.add(userId);
 
-  eventBus.publish("sync.started", { userId });
-
-  let totalNewEvents = 0;
-  let failure: unknown = null;
-
-  for (const account of accounts) {
-    try {
-      const adapter = getAdapter(account.provider);
-      const { events, nextCursor } = await adapter.fetchPlayHistory(
-        account,
-        account.historyCursor
-      );
-
-      const newEvents = await persistEvents(userId, events);
-      totalNewEvents += newEvents;
-
-      await recordSuccess(account, nextCursor);
-      log(
-        userId,
-        `provider=${account.provider} fetched=${events.length} new=${newEvents}`
-      );
-    } catch (error) {
-      failure = error;
-      console.error(`[sync] userId=${userId} provider=${account.provider} failed`, error);
-      await recordFailure(account, error).catch((bookkeepingError) => {
-        console.error(
-          `[sync] userId=${userId} failed to record sync failure`,
-          bookkeepingError
-        );
-      });
-    }
-  }
-
-  if (failure) {
-    eventBus.publish("sync.failed", {
-      userId,
-      error: failure instanceof Error ? failure.message : String(failure),
+  try {
+    const accounts = await prisma.providerAccount.findMany({
+      where: { userId, syncEnabled: true },
     });
-    return;
-  }
 
-  eventBus.publish("sync.completed", { userId, newEvents: totalNewEvents });
+    if (!accounts.length) {
+      log(userId, "no sync-enabled provider accounts, skipping");
+      return;
+    }
+
+    eventBus.publish("sync.started", { userId });
+
+    let totalNewEvents = 0;
+    let failure: unknown = null;
+
+    for (const account of accounts) {
+      noteSyncAttempt(account.id);
+      try {
+        const adapter = getAdapter(account.provider);
+        const { events, nextCursor } = await adapter.fetchPlayHistory(
+          account,
+          account.historyCursor
+        );
+
+        const newEvents = await persistEvents(userId, events);
+        totalNewEvents += newEvents;
+
+        await recordSuccess(account, nextCursor);
+        log(
+          userId,
+          `provider=${account.provider} fetched=${events.length} new=${newEvents}`
+        );
+      } catch (error) {
+        failure = error;
+        console.error(`[sync] userId=${userId} provider=${account.provider} failed`, error);
+        await recordFailure(account, error).catch((bookkeepingError) => {
+          console.error(
+            `[sync] userId=${userId} failed to record sync failure`,
+            bookkeepingError
+          );
+        });
+      }
+    }
+
+    if (failure) {
+      eventBus.publish("sync.failed", {
+        userId,
+        error: failure instanceof Error ? failure.message : String(failure),
+      });
+      return;
+    }
+
+    eventBus.publish("sync.completed", { userId, newEvents: totalNewEvents });
+  } finally {
+    inFlightUserIds.delete(userId);
+  }
 };
 
 // Fire-and-forget entry point preserved from the legacy services/syncService.ts:
