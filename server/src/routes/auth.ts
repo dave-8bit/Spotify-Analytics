@@ -100,9 +100,25 @@ router.get("/spotify/callback", async (req: Request, res: Response) => {
     expires_in: number;
   } = tokenResponse.data;
 
-  const meResponse = await axios.get(SPOTIFY_ME_URL, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let meResponse;
+  try {
+    meResponse = await axios.get(SPOTIFY_ME_URL, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (err) {
+    const axiosErr = err as { response?: { status?: number; data?: unknown } };
+    console.error(
+      "Spotify /me failed:",
+      axiosErr.response?.status,
+      JSON.stringify(axiosErr.response?.data)
+    );
+    res.status(502).json({
+      error: "Spotify profile fetch failed",
+      spotifyStatus: axiosErr.response?.status,
+      spotifyBody: axiosErr.response?.data,
+    });
+    return;
+  }
 
   const spotifyUser = meResponse.data as {
     id: string;
