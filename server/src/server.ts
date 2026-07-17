@@ -3,24 +3,9 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import app from "./app";
+import { validateEnv } from "./config/env";
 import { connectPrisma, disconnectPrisma } from "./config/prisma";
-
-const validateEnv = () => {
-  const required = [
-    "DATABASE_URL",
-    "SESSION_SECRET",
-    "SPOTIFY_CLIENT_ID",
-    "SPOTIFY_CLIENT_SECRET",
-    "SPOTIFY_REDIRECT_URI",
-    "FRONTEND_URL",
-  ] as const;
-
-  const missing = required.filter((key) => !process.env[key]);
-
-  if (missing.length) {
-    throw new Error(`Missing environment variables: ${missing.join(", ")}`);
-  }
-};
+import { closeSessionStore } from "./config/session";
 
 export const startServer = async (): Promise<void> => {
   try {
@@ -40,6 +25,7 @@ export const startServer = async (): Promise<void> => {
 
 const shutdown = async () => {
   try {
+    await closeSessionStore();
     await disconnectPrisma();
   } finally {
     process.exit(0);

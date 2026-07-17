@@ -42,6 +42,17 @@ model PlayEvent {
   @@index([userId, playedAt])
 }
 
+// Infrastructure table for express-session via connect-pg-simple (ARCHITECTURE.md §6.1).
+// Shape must match what connect-pg-simple expects; written only by the session store.
+model Session {
+  sid    String   @id
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire])
+  @@map("session")
+}
+
 model TopSnapshot {
   id        Int      @id @default(autoincrement())
   userId    Int
