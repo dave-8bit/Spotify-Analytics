@@ -23,6 +23,10 @@ import {
   getTopTracksDb,
   triggerSync,
 } from "../services/api";
+import useSocket from "../hooks/useSocket";
+import useLiveEvent from "../hooks/useLiveEvents";
+import LiveIndicator from "../components/LiveIndicator";
+import { socket } from "../services/socket";
 
 type TabKey = "tracks" | "artists" | "albums" | "recent";
 
@@ -96,6 +100,34 @@ export default function DashboardPage() {
 
   const [dbTracks, setDbTracks] = useState<DbTrack[]>([]);
   const [dbArtists, setDbArtists] = useState<DbArtist[]>([]);
+
+  // M4 real-time layer (ARCHITECTURE.md §7): the socket *enhances* the
+  // REST-loaded dashboard; every handler below patches state that REST already
+  // populates, so a missing socket degrades to today's behavior.
+  const { connected } = useSocket(true);
+
+  useLiveEvent("sync:started", () => {
+    setSyncing(true);
+  });
+
+  useLiveEvent("sync:completed", ({ newEvents }) => {
+    setSyncing(false);
+    if (newEvents > 0) {
+      void getRecentlyPlayed().then(setRecentTracks).catch(() => {});
+      void getStats().then(setStats).catch(() => {});
+    }
+  });
+
+  useLiveEvent("sync:failed", () => {
+    setSyncing(false);
+  });
+
+  useLiveEvent("playEvent:created", ({ event }) => {
+    setRecentTracks((prev) => {
+      if (prev.some((t) => t.id === event.id)) return prev;
+      return [event, ...prev].slice(0, 50);
+    });
+  });
 
   useEffect(() => {
     // keep dataSource and selectedRange in sync
@@ -222,8 +254,15 @@ export default function DashboardPage() {
   };
 
   const onSyncNow = async () => {
+    setSyncing(true);
+    // §7.3: sync:request replaces the polling REST call when the socket is
+    // live — the sync:completed / sync:failed handlers clear the spinner and
+    // refresh data. REST stays as the offline fallback (§7.4).
+    if (connected) {
+      socket.emit("sync:request", () => {});
+      return;
+    }
     try {
-      setSyncing(true);
       await triggerSync();
       await refetchAll();
     } finally {
@@ -273,6 +312,8 @@ export default function DashboardPage() {
             gap: 12,
           }}
         >
+          <LiveIndicator connected={connected} />
+
           <div style={{ textAlign: "right" }}>
             <div style={{ fontWeight: 700, fontSize: 14 }}>
               {user?.displayName ?? ""}

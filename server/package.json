@@ -24,7 +24,8 @@
     "groq-sdk": "^1.2.0",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
-    "pg": "^8.22.0"
+    "pg": "^8.22.0",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/connect-pg-simple": "^7.0.3",
