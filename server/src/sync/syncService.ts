@@ -8,8 +8,14 @@ import type { ProviderAccount } from "@prisma/client";
 import prisma from "../config/prisma";
 import { eventBus } from "../events/bus";
 import { getAdapter } from "../ingestion/registry";
-import type { CanonicalPlayEvent } from "../ingestion/types";
-import { noteSyncAttempt, shouldDisableSync } from "./syncPolicy";
+import type { CanonicalPlaybackState, CanonicalPlayEvent } from "../ingestion/types";
+import {
+  isRateLimitError,
+  notePlaybackFailure,
+  notePlaybackSuccess,
+  noteSyncAttempt,
+  shouldDisableSync,
+} from "./syncPolicy";
 
 const log = (userId: number, message: string): void => {
   console.log(`[sync] userId=${userId} ${message}`);
@@ -210,6 +216,79 @@ export const triggerSync = async (userId: number): Promise<void> => {
     await syncUser(userId);
   } catch (error) {
     console.error(`[sync] userId=${userId} unexpected sync error`, error);
+  }
+};
+
+// ── Playback fast path (M5, ARCHITECTURE.md §3.2) ───────────────────────────
+// Bypasses the Analytics Engine entirely: playback state is ephemeral, never
+// stored, and only polled for users with an open socket. The only persistence
+// this path can trigger is a token refresh inside the adapter's client.
+
+// §8.1 guard rail: "Skip if previous poll for user still in flight."
+const playbackInFlightUserIds = new Set<number>();
+
+// Duplicate prevention: when nothing is playing, publish `state: null` once
+// (so the client hides the card) and stay quiet until playback resumes —
+// republishing an identical "stopped" every tick is noise. Playing states
+// always publish (progressMs advances every poll).
+const playbackStoppedUserIds = new Set<number>();
+
+export type PlaybackPollOutcome = "published" | "skipped" | "failed";
+
+export const pollPlayback = async (
+  userId: number
+): Promise<PlaybackPollOutcome> => {
+  if (playbackInFlightUserIds.has(userId)) {
+    return "skipped";
+  }
+  playbackInFlightUserIds.add(userId);
+
+  try {
+    const accounts = await prisma.providerAccount.findMany({
+      where: { userId, syncEnabled: true },
+    });
+
+    if (!accounts.length) {
+      notePlaybackSuccess(userId); // nothing to poll ≠ failure
+      return "skipped";
+    }
+
+    // Provider-agnostic: first account reporting active playback wins. With a
+    // single provider (v1) this is simply "the Spotify answer".
+    let state: CanonicalPlaybackState | null = null;
+    for (const account of accounts) {
+      const adapter = getAdapter(account.provider);
+      const playback = await adapter.fetchCurrentPlayback(account);
+      if (playback) {
+        state = playback;
+        break;
+      }
+    }
+
+    notePlaybackSuccess(userId);
+
+    if (state === null) {
+      if (playbackStoppedUserIds.has(userId)) {
+        return "skipped"; // already told this user's room playback stopped
+      }
+      playbackStoppedUserIds.add(userId);
+    } else {
+      playbackStoppedUserIds.delete(userId);
+    }
+
+    eventBus.publish("playback.updated", { userId, state });
+    return "published";
+  } catch (error) {
+    notePlaybackFailure(userId);
+    // Rate-limit errors propagate so the poller can pause the batch (§8.2);
+    // everything else is logged here and absorbed.
+    if (isRateLimitError(error)) {
+      throw error;
+    }
+    console.error(`[sync] userId=${userId} playback poll failed`, error);
+    return "failed";
+  } finally {
+    playbackInFlightUserIds.delete(userId);
   }
 };
 

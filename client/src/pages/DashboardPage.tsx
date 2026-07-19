@@ -26,7 +26,9 @@ import {
 import useSocket from "../hooks/useSocket";
 import useLiveEvent from "../hooks/useLiveEvents";
 import LiveIndicator from "../components/LiveIndicator";
+import NowPlayingCard from "../components/NowPlayingCard";
 import { socket } from "../services/socket";
+import type { SocketPlaybackState } from "../types/socketEvents";
 
 type TabKey = "tracks" | "artists" | "albums" | "recent";
 
@@ -128,6 +130,23 @@ export default function DashboardPage() {
       return [event, ...prev].slice(0, 50);
     });
   });
+
+  // M5 (§3.2 fast path, §7.4): playback is socket-only by design — no REST
+  // representation. Offline socket or stopped playback ⇒ the card hides.
+  const [playback, setPlayback] = useState<SocketPlaybackState | null>(null);
+
+  useLiveEvent("playback:updated", (state) => {
+    setPlayback(state);
+  });
+
+  useLiveEvent("playback:stopped", () => {
+    setPlayback(null);
+  });
+
+  useEffect(() => {
+    // Stale playback must not linger when the socket drops (§7.4).
+    if (!connected) setPlayback(null);
+  }, [connected]);
 
   useEffect(() => {
     // keep dataSource and selectedRange in sync
@@ -363,6 +382,9 @@ export default function DashboardPage() {
           </button>
         </div>
       </div>
+
+      {/* Now Playing (M5) — socket-only, hides when offline/stopped */}
+      {playback && <NowPlayingCard playback={playback} />}
 
       {/* Stats bar */}
       <div

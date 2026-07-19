@@ -4,6 +4,19 @@
 
 import type { RecentTrack } from "./index";
 
+// Playback state wire shape (M5): ephemeral, never persisted server-side.
+export type SocketPlaybackState = {
+  isPlaying: boolean;
+  track: {
+    name: string;
+    artistName: string;
+    albumImage: string | null;
+    durationMs: number | null;
+  };
+  progressMs: number | null;
+  fetchedAt: string;
+};
+
 // Server → Client
 export type ServerToClientEvents = {
   "sync:started": (payload: Record<string, never>) => void;
@@ -11,6 +24,8 @@ export type ServerToClientEvents = {
   "sync:failed": (payload: { message: string }) => void;
   "sync:disabled": (payload: { provider: string; message: string }) => void;
   "playEvent:created": (payload: { event: RecentTrack }) => void;
+  "playback:updated": (payload: SocketPlaybackState) => void;
+  "playback:stopped": (payload: Record<string, never>) => void;
 };
 
 // Client → Server (minimal — reads stay on REST)

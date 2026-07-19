@@ -11,6 +11,11 @@ import {
   POLL_HISTORY_JOB_NAME,
   runPollHistoryTick,
 } from "./jobs/pollHistory";
+import {
+  POLL_PLAYBACK_CRON,
+  POLL_PLAYBACK_JOB_NAME,
+  runPollPlaybackTick,
+} from "./jobs/pollPlayback";
 
 type JobDefinition = {
   name: string;
@@ -23,6 +28,11 @@ const JOBS: JobDefinition[] = [
     name: POLL_HISTORY_JOB_NAME,
     cronExpression: POLL_HISTORY_CRON,
     run: runPollHistoryTick,
+  },
+  {
+    name: POLL_PLAYBACK_JOB_NAME,
+    cronExpression: POLL_PLAYBACK_CRON,
+    run: runPollPlaybackTick,
   },
 ];
 

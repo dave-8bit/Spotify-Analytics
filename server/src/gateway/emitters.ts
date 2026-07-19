@@ -5,11 +5,12 @@
 
 import type { Server } from "socket.io";
 import { eventBus } from "../events/bus";
-import type { PlayEventPayload } from "../events/types";
+import type { PlaybackStatePayload, PlayEventPayload } from "../events/types";
 import {
   userRoom,
   type ClientToServerEvents,
   type ServerToClientEvents,
+  type SocketPlaybackState,
   type SocketPlayEvent,
 } from "./events";
 
@@ -23,6 +24,20 @@ const toSocketPlayEvent = (event: PlayEventPayload): SocketPlayEvent => ({
   albumImage: event.albumImage,
   playedAt: event.playedAt.toISOString(),
   durationMs: event.durationMs,
+});
+
+const toSocketPlaybackState = (
+  state: PlaybackStatePayload
+): SocketPlaybackState => ({
+  isPlaying: state.isPlaying,
+  track: {
+    name: state.trackName,
+    artistName: state.artistName,
+    albumImage: state.albumImage,
+    durationMs: state.durationMs,
+  },
+  progressMs: state.progressMs,
+  fetchedAt: state.fetchedAt.toISOString(),
 });
 
 // Subscribes the gateway to every M4 domain event. All emissions are scoped to
@@ -53,6 +68,19 @@ export const registerEmitters = (io: GatewayServer): (() => void) => {
       io.to(userRoom(userId)).emit("playEvent:created", {
         event: toSocketPlayEvent(event),
       });
+    }),
+
+    // M5 (§3.2 fast path, §7.3): state=null means nothing is playing — the
+    // client hides the Now Playing card. Pure projection, no state held here.
+    eventBus.subscribe("playback.updated", ({ userId, state }) => {
+      if (state === null) {
+        io.to(userRoom(userId)).emit("playback:stopped", {});
+        return;
+      }
+      io.to(userRoom(userId)).emit(
+        "playback:updated",
+        toSocketPlaybackState(state)
+      );
     }),
   ];
 

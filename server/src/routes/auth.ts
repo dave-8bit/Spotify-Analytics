@@ -27,6 +27,9 @@ const SCOPES = [
   "user-read-private",
   "user-read-email",
   "user-read-recently-played",
+  // M5 (ARCHITECTURE.md roadmap): playback scope — existing users re-consent
+  // on their next login; until then their playback poll 403s and is skipped.
+  "user-read-currently-playing",
   "user-top-read",
   "playlist-read-private",
   "playlist-read-collaborative",

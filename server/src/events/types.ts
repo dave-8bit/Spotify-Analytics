@@ -22,8 +22,22 @@ export type PlayEventPayload = {
   durationMs: number | null;
 };
 
-// Events not yet published/subscribed anywhere (playback.updated, stats.updated,
-// insight.*) are added at their owning milestone (M5/M6/M7) — additive only.
+// Mirror of CanonicalPlaybackState — the payload of `playback.updated` (M5).
+// Ephemeral by design (§3.2): never persisted, only polled for users with an
+// open socket. `state: null` means nothing is playing.
+export type PlaybackStatePayload = {
+  provider: string;
+  isPlaying: boolean;
+  trackName: string;
+  artistName: string;
+  albumImage: string | null;
+  progressMs: number | null;
+  durationMs: number | null;
+  fetchedAt: Date;
+};
+
+// Events not yet published/subscribed anywhere (stats.updated, insight.*) are
+// added at their owning milestone (M6/M7) — additive only.
 export type DomainEventMap = {
   "sync.requested": { userId: number; reason: string };
   "sync.started": { userId: number };
@@ -31,6 +45,7 @@ export type DomainEventMap = {
   "sync.failed": { userId: number; error: string };
   "sync.disabled": { userId: number; provider: string; reason: string };
   "playEvent.created": { userId: number; event: PlayEventPayload };
+  "playback.updated": { userId: number; state: PlaybackStatePayload | null };
 };
 
 export type DomainEventName = keyof DomainEventMap;

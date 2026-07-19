@@ -7,7 +7,7 @@
 // Contract rules: additive payload changes only — a breaking change requires
 // a new event name, with old and new emitted in parallel for one release.
 //
-// M4 implements the sync:* + playEvent:created slice. playback:* (M5),
+// M4 implemented the sync:* + playEvent:created slice; M5 adds playback:*.
 // stats:updated (M6) and insight:generated (M7) are added at their milestones.
 
 // Wire shape of a play event as delivered to clients — matches the client's
@@ -22,6 +22,19 @@ export type SocketPlayEvent = {
   durationMs: number | null;
 };
 
+// Wire shape of playback state (§7.3): ephemeral, never persisted.
+export type SocketPlaybackState = {
+  isPlaying: boolean;
+  track: {
+    name: string;
+    artistName: string;
+    albumImage: string | null;
+    durationMs: number | null;
+  };
+  progressMs: number | null;
+  fetchedAt: string;
+};
+
 // Server → Client
 export type ServerToClientEvents = {
   "sync:started": (payload: Record<string, never>) => void;
@@ -29,6 +42,8 @@ export type ServerToClientEvents = {
   "sync:failed": (payload: { message: string }) => void;
   "sync:disabled": (payload: { provider: string; message: string }) => void;
   "playEvent:created": (payload: { event: SocketPlayEvent }) => void;
+  "playback:updated": (payload: SocketPlaybackState) => void;
+  "playback:stopped": (payload: Record<string, never>) => void;
 };
 
 // Client → Server (minimal — reads stay on REST, §7.3)

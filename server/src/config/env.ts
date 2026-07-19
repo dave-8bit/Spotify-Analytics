@@ -45,6 +45,25 @@ export const getHistoryPollIntervalMinutes = (): number => {
   return minutes;
 };
 
+// Playback polling cadence (ARCHITECTURE.md §8.1: "30–60 s", M5). Runs only
+// for users in the Socket Registry, so this is a per-active-user cost.
+const DEFAULT_PLAYBACK_POLL_INTERVAL_SECONDS = 30;
+
+export const getPlaybackPollIntervalSeconds = (): number => {
+  const raw = process.env.PLAYBACK_POLL_INTERVAL_SECONDS;
+  if (raw === undefined || raw === "") {
+    return DEFAULT_PLAYBACK_POLL_INTERVAL_SECONDS;
+  }
+  const seconds = Number(raw);
+  // node-cron second-steps must divide the minute evenly.
+  if (!Number.isInteger(seconds) || seconds < 5 || seconds > 60 || 60 % seconds !== 0) {
+    throw new Error(
+      `Invalid PLAYBACK_POLL_INTERVAL_SECONDS "${raw}" — expected an integer divisor of 60 between 5 and 60`
+    );
+  }
+  return seconds;
+};
+
 export const validateEnv = (): void => {
   const missing = REQUIRED_ENV_VARS.filter((key) => !process.env[key]);
 
@@ -55,4 +74,5 @@ export const validateEnv = (): void => {
   // Fail fast on malformed optional values too.
   getRole();
   getHistoryPollIntervalMinutes();
+  getPlaybackPollIntervalSeconds();
 };

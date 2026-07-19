@@ -88,3 +88,47 @@ export const isInStaggerSlot = (
   const currentSlot = Math.floor(now.getTime() / POLL_TICK_MS) % windowSlots;
   return getStaggerSlot(userId, windowSlots) === currentSlot;
 };
+
+// ── Playback polling policy (M5, ARCHITECTURE.md §3.2, §8.1) ────────────────
+// Playback state is ephemeral — no DB bookkeeping. Failure state is in-memory
+// (v1 single worker instance, §11.2): a user whose playback poll keeps failing
+// (e.g. 403 from a pre-M5 token without the playback scope) is skipped for
+// exponentially more ticks instead of being hammered every interval.
+
+const MAX_PLAYBACK_SKIP_TICKS = 32; // ~16 min at a 30s cadence
+
+type PlaybackFailureState = { count: number; skipUntilTickExclusive: number };
+const playbackFailures = new Map<number, PlaybackFailureState>();
+let playbackTick = 0;
+
+// Called once per pollPlayback tick, before target selection.
+export const advancePlaybackTick = (): void => {
+  playbackTick += 1;
+};
+
+export const isPlaybackPollDue = (userId: number): boolean => {
+  const state = playbackFailures.get(userId);
+  if (!state) return true;
+  return playbackTick >= state.skipUntilTickExclusive;
+};
+
+export const notePlaybackSuccess = (userId: number): void => {
+  playbackFailures.delete(userId);
+};
+
+export const notePlaybackFailure = (userId: number): void => {
+  const previous = playbackFailures.get(userId);
+  const count = (previous?.count ?? 0) + 1;
+  const skipTicks = Math.min(BACKOFF_BASE ** count, MAX_PLAYBACK_SKIP_TICKS);
+  playbackFailures.set(userId, {
+    count,
+    skipUntilTickExclusive: playbackTick + skipTicks,
+  });
+};
+
+// Rate-limit citizenship (§8.2): when the provider signals pressure, the
+// poller pauses the whole batch rather than working through remaining users.
+export const isRateLimitError = (error: unknown): boolean => {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  return status === 429;
+};
