@@ -25,6 +25,8 @@ model User {
   accounts       ProviderAccount[]
   playEvents     PlayEvent[]
   topSnapshots   TopSnapshot[]
+  statsSnapshot  StatsSnapshot?
+  sessions       ListeningSession[]
 }
 
 // Per-provider link between a User and an external music service (ARCHITECTURE.md §6.2).
@@ -92,4 +94,32 @@ model TopSnapshot {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, type, timeRange])
+}
+
+// Precomputed /stats (ARCHITECTURE.md §6.2, M6). Derived — rebuildable from
+// PlayEvent at any time; written only by the Analytics Engine (§6.1).
+model StatsSnapshot {
+  userId        Int      @id
+  totalPlays    Int
+  totalMinutes  Float
+  uniqueTracks  Int
+  uniqueArtists Int
+  computedAt    DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Derived listening sessions (ARCHITECTURE.md §6.2, M6): gap > 30 min between
+// consecutive plays ⇒ new session. Written only by the Analytics Engine.
+model ListeningSession {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  startedAt  DateTime
+  endedAt    DateTime?
+  trackCount Int
+  totalMs    Int
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
 }

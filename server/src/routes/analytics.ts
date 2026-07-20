@@ -3,11 +3,40 @@ import prisma from "../config/prisma";
 import { requireAuth, getSession } from "../middleware/auth";
 import { spotifyGet } from "../services/spotifyService";
 import { eventBus } from "../events/bus";
+import {
+  computeStats,
+  computeTopAlbumsSince,
+  computeTopArtistsSince,
+  computeTopTracksSince,
+  windowKeyForDays,
+  type SnapshotWindowKey,
+  type TopType,
+} from "../analytics/computations";
 import type { TimeRange } from "../types";
 
 const router = Router();
 
 router.use(requireAuth);
+
+// Snapshot-first read (ARCHITECTURE.md §3.3, M6): serve the precomputed
+// TopSnapshot row when one exists; the caller computes on miss via the same
+// pure functions the Analytics Engine used to write it. The fallback stays
+// permanently — snapshots are rebuildable caches, not critical state.
+const readTopSnapshot = async (
+  userId: number,
+  type: TopType,
+  timeRange: SnapshotWindowKey
+): Promise<unknown[] | null> => {
+  const snapshot = await prisma.topSnapshot.findUnique({
+    where: { userId_type_timeRange: { userId, type, timeRange } },
+  });
+  return snapshot && Array.isArray(snapshot.data)
+    ? (snapshot.data as unknown[])
+    : null;
+};
+
+const sinceFromDays = (days: number): Date =>
+  new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
 router.get("/sync", async (req: Request, res: Response) => {
   const session = getSession(req);
@@ -51,14 +80,13 @@ router.get("/top-albums", async (req: Request, res: Response) => {
   const session = getSession(req);
   const userId = session.userId!;
 
-  const albums = await prisma.playEvent.groupBy({
-    by: ["albumId", "albumName", "albumImage"],
-    where: { userId },
-    orderBy: { _count: { albumId: "desc" } },
-    take: 20,
-    _sum: { durationMs: true },
-  });
+  const snapshot = await readTopSnapshot(userId, "albums", "all");
+  if (snapshot) {
+    res.json({ data: snapshot });
+    return;
+  }
 
+  const albums = await computeTopAlbumsSince(userId, null);
   res.json({ data: albums });
 });
 
@@ -67,16 +95,17 @@ router.get("/top-tracks-db", async (req: Request, res: Response) => {
   const userId = session.userId!;
 
   const days = Number(req.query.days ?? 28);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const tracks = await prisma.playEvent.groupBy({
-    by: ["trackId", "trackName", "artistName", "albumImage"],
-    where: { userId, playedAt: { gte: since } },
-    orderBy: { _count: { trackId: "desc" } },
-    take: 50,
-    _sum: { durationMs: true },
-  });
+  const windowKey = windowKeyForDays(days);
+  if (windowKey) {
+    const snapshot = await readTopSnapshot(userId, "tracks", windowKey);
+    if (snapshot) {
+      res.json({ data: snapshot });
+      return;
+    }
+  }
 
+  const tracks = await computeTopTracksSince(userId, sinceFromDays(days));
   res.json({ data: tracks });
 });
 
@@ -85,16 +114,17 @@ router.get("/top-artists-db", async (req: Request, res: Response) => {
   const userId = session.userId!;
 
   const days = Number(req.query.days ?? 28);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const artists = await prisma.playEvent.groupBy({
-    by: ["artistId", "artistName"],
-    where: { userId, playedAt: { gte: since } },
-    orderBy: { _count: { artistId: "desc" } },
-    take: 50,
-    _sum: { durationMs: true },
-  });
+  const windowKey = windowKeyForDays(days);
+  if (windowKey) {
+    const snapshot = await readTopSnapshot(userId, "artists", windowKey);
+    if (snapshot) {
+      res.json({ data: snapshot });
+      return;
+    }
+  }
 
+  const artists = await computeTopArtistsSince(userId, sinceFromDays(days));
   res.json({ data: artists });
 });
 
@@ -103,16 +133,17 @@ router.get("/top-albums-db", async (req: Request, res: Response) => {
   const userId = session.userId!;
 
   const days = Number(req.query.days ?? 28);
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
-  const albums = await prisma.playEvent.groupBy({
-    by: ["albumId", "albumName", "albumImage"],
-    where: { userId, playedAt: { gte: since } },
-    orderBy: { _count: { albumId: "desc" } },
-    take: 20,
-    _sum: { durationMs: true },
-  });
+  const windowKey = windowKeyForDays(days);
+  if (windowKey) {
+    const snapshot = await readTopSnapshot(userId, "albums", windowKey);
+    if (snapshot) {
+      res.json({ data: snapshot });
+      return;
+    }
+  }
 
+  const albums = await computeTopAlbumsSince(userId, sinceFromDays(days));
   res.json({ data: albums });
 });
 
@@ -134,46 +165,39 @@ router.get("/most-played", async (req: Request, res: Response) => {
   const session = getSession(req);
   const userId = session.userId!;
 
-  const tracks = await prisma.playEvent.groupBy({
-    by: ["trackId", "trackName", "artistName", "albumImage"],
-    where: { userId },
-    orderBy: { _count: { trackId: "desc" } },
-    take: 20,
-  });
+  // All-time top tracks; the snapshot holds 50 rows, this endpoint serves 20.
+  const snapshot = await readTopSnapshot(userId, "tracks", "all");
+  if (snapshot) {
+    res.json({ data: snapshot.slice(0, 20) });
+    return;
+  }
 
-  res.json({ data: tracks });
+  const tracks = await computeTopTracksSince(userId, null);
+  res.json({ data: tracks.slice(0, 20) });
 });
 
 router.get("/stats", async (req: Request, res: Response) => {
   const session = getSession(req);
   const userId = session.userId!;
 
-  const [totalPlays, groupedByTrack, groupedByArtist] = await Promise.all([
-    prisma.playEvent.count({ where: { userId } }),
-    prisma.playEvent.groupBy({
-      by: ["trackId"],
-      where: { userId },
-    }),
-    prisma.playEvent.groupBy({
-      by: ["artistId"],
-      where: { userId },
-    }),
-  ]);
-
-  const sumDuration = await prisma.playEvent.aggregate({
-    _sum: { durationMs: true },
+  // Snapshot-first (§3.3): the StatsSnapshot row the Analytics Engine wrote.
+  const snapshot = await prisma.statsSnapshot.findUnique({
     where: { userId },
   });
 
-  const totalMinutes = (sumDuration._sum.durationMs ?? 0) / 60000;
+  if (snapshot) {
+    res.json({
+      totalPlays: snapshot.totalPlays,
+      totalMinutes: snapshot.totalMinutes,
+      uniqueTracks: snapshot.uniqueTracks,
+      uniqueArtists: snapshot.uniqueArtists,
+    });
+    return;
+  }
 
-  res.json({
-    totalPlays,
-    totalMinutes,
-    uniqueTracks: groupedByTrack.length,
-    uniqueArtists: groupedByArtist.length,
-  });
+  // Miss → compute on read via the same pure function the engine writes with.
+  const stats = await computeStats(userId);
+  res.json(stats);
 });
 
 export default router;
-

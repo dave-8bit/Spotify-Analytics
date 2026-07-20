@@ -9,6 +9,10 @@ import { getRole, validateEnv } from "./config/env";
 import { connectPrisma, disconnectPrisma } from "./config/prisma";
 import { closeSessionStore } from "./config/session";
 import { attachGateway, closeGateway } from "./gateway";
+import {
+  registerAnalyticsSubscribers,
+  stopAnalyticsEngine,
+} from "./analytics/engine";
 import { registerSyncSubscribers } from "./sync/syncService";
 import { startScheduler, stopScheduler } from "./workers/scheduler";
 
@@ -20,6 +24,7 @@ export const startServer = async (): Promise<void> => {
     await connectPrisma();
 
     registerSyncSubscribers();
+    registerAnalyticsSubscribers();
 
     // Behavior is selected by ROLE (ARCHITECTURE.md §8.2, §11.2): "api" serves
     // HTTP only, "worker" runs schedulers only, "all" (default) does both in
@@ -56,6 +61,7 @@ export const startServer = async (): Promise<void> => {
 const shutdown = async () => {
   try {
     await stopScheduler();
+    stopAnalyticsEngine();
     // Gateway before session store: closing sockets stops new handshakes from
     // touching the (about to close) session pool.
     await closeGateway();

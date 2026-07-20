@@ -16,6 +16,11 @@ import {
   POLL_PLAYBACK_JOB_NAME,
   runPollPlaybackTick,
 } from "./jobs/pollPlayback";
+import {
+  ANALYTICS_SWEEP_CRON,
+  ANALYTICS_SWEEP_JOB_NAME,
+  runAnalyticsSweepTick,
+} from "./jobs/analyticsSweep";
 
 type JobDefinition = {
   name: string;
@@ -33,6 +38,11 @@ const JOBS: JobDefinition[] = [
     name: POLL_PLAYBACK_JOB_NAME,
     cronExpression: POLL_PLAYBACK_CRON,
     run: runPollPlaybackTick,
+  },
+  {
+    name: ANALYTICS_SWEEP_JOB_NAME,
+    cronExpression: ANALYTICS_SWEEP_CRON,
+    run: runAnalyticsSweepTick,
   },
 ];
 

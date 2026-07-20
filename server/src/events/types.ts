@@ -36,8 +36,17 @@ export type PlaybackStatePayload = {
   fetchedAt: Date;
 };
 
-// Events not yet published/subscribed anywhere (stats.updated, insight.*) are
-// added at their owning milestone (M6/M7) — additive only.
+// Mirror of StatsSnapshot aggregates — the payload of `stats.updated` (M6).
+// Published by the Analytics Engine after each snapshot recompute (§4.3).
+export type StatsPayload = {
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+};
+
+// Events not yet published/subscribed anywhere (insight.*) are added at their
+// owning milestone (M7) — additive only.
 export type DomainEventMap = {
   "sync.requested": { userId: number; reason: string };
   "sync.started": { userId: number };
@@ -46,6 +55,7 @@ export type DomainEventMap = {
   "sync.disabled": { userId: number; provider: string; reason: string };
   "playEvent.created": { userId: number; event: PlayEventPayload };
   "playback.updated": { userId: number; state: PlaybackStatePayload | null };
+  "stats.updated": { userId: number; stats: StatsPayload };
 };
 
 export type DomainEventName = keyof DomainEventMap;

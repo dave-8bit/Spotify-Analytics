@@ -82,6 +82,17 @@ export const registerEmitters = (io: GatewayServer): (() => void) => {
         toSocketPlaybackState(state)
       );
     }),
+
+    // M6 (§7.3): live stat tiles. The stats payload already matches the wire
+    // shape 1:1 — projected field-by-field so bus payload growth stays opt-in.
+    eventBus.subscribe("stats.updated", ({ userId, stats }) => {
+      io.to(userRoom(userId)).emit("stats:updated", {
+        totalPlays: stats.totalPlays,
+        totalMinutes: stats.totalMinutes,
+        uniqueTracks: stats.uniqueTracks,
+        uniqueArtists: stats.uniqueArtists,
+      });
+    }),
   ];
 
   return () => {

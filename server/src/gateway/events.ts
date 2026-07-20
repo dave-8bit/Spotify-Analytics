@@ -7,8 +7,8 @@
 // Contract rules: additive payload changes only — a breaking change requires
 // a new event name, with old and new emitted in parallel for one release.
 //
-// M4 implemented the sync:* + playEvent:created slice; M5 adds playback:*.
-// stats:updated (M6) and insight:generated (M7) are added at their milestones.
+// M4 implemented the sync:* + playEvent:created slice; M5 adds playback:*;
+// M6 adds stats:updated. insight:generated (M7) is added at its milestone.
 
 // Wire shape of a play event as delivered to clients — matches the client's
 // RecentTrack type. Dates cross the socket as ISO strings.
@@ -35,6 +35,15 @@ export type SocketPlaybackState = {
   fetchedAt: string;
 };
 
+// Wire shape of the live stat tiles (§7.3, M6): mirrors the StatsSnapshot
+// aggregates published by the Analytics Engine.
+export type SocketStats = {
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+};
+
 // Server → Client
 export type ServerToClientEvents = {
   "sync:started": (payload: Record<string, never>) => void;
@@ -44,6 +53,7 @@ export type ServerToClientEvents = {
   "playEvent:created": (payload: { event: SocketPlayEvent }) => void;
   "playback:updated": (payload: SocketPlaybackState) => void;
   "playback:stopped": (payload: Record<string, never>) => void;
+  "stats:updated": (payload: SocketStats) => void;
 };
 
 // Client → Server (minimal — reads stay on REST, §7.3)

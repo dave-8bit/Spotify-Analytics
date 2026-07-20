@@ -17,6 +17,14 @@ export type SocketPlaybackState = {
   fetchedAt: string;
 };
 
+// Live stat tiles wire shape (M6): mirrors server SocketStats.
+export type SocketStats = {
+  totalPlays: number;
+  totalMinutes: number;
+  uniqueTracks: number;
+  uniqueArtists: number;
+};
+
 // Server → Client
 export type ServerToClientEvents = {
   "sync:started": (payload: Record<string, never>) => void;
@@ -26,6 +34,7 @@ export type ServerToClientEvents = {
   "playEvent:created": (payload: { event: RecentTrack }) => void;
   "playback:updated": (payload: SocketPlaybackState) => void;
   "playback:stopped": (payload: Record<string, never>) => void;
+  "stats:updated": (payload: SocketStats) => void;
 };
 
 // Client → Server (minimal — reads stay on REST)

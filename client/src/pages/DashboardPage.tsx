@@ -124,6 +124,13 @@ export default function DashboardPage() {
     setSyncing(false);
   });
 
+  // M6 (§7.3): live stat tiles — the payload mirrors the REST /stats shape,
+  // so it patches the same state the REST load populates (§7.4 degradation:
+  // no socket, no patch, tiles still show REST-loaded values).
+  useLiveEvent("stats:updated", (nextStats) => {
+    setStats(nextStats);
+  });
+
   useLiveEvent("playEvent:created", ({ event }) => {
     setRecentTracks((prev) => {
       if (prev.some((t) => t.id === event.id)) return prev;
