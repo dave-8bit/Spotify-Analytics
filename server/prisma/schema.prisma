@@ -27,6 +27,7 @@ model User {
   topSnapshots   TopSnapshot[]
   statsSnapshot  StatsSnapshot?
   sessions       ListeningSession[]
+  insights       Insight[]
 }
 
 // Per-provider link between a User and an external music service (ARCHITECTURE.md §6.2).
@@ -122,4 +123,23 @@ model ListeningSession {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, startedAt])
+}
+
+// AI-generated narrative insights (ARCHITECTURE.md §6.2, M7) — "Generated"
+// category: rebuildable (at token cost) from snapshots, written only by the
+// Insights Engine (§6.1). `content` is the JSON body the provider returned
+// (title + summary + highlights); `kind` classifies the narrative type.
+model Insight {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  kind        String // "weekly_recap" | "trend" | "discovery" | …
+  content     Json
+  model       String
+  periodStart DateTime
+  periodEnd   DateTime
+  generatedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, generatedAt])
 }

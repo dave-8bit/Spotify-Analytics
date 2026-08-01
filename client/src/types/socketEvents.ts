@@ -2,7 +2,7 @@
 // Source of truth: server/src/gateway/events.ts — the two files are maintained
 // manually and reviewed together. Additive payload changes only.
 
-import type { RecentTrack } from "./index";
+import type { Insight, RecentTrack } from "./index";
 
 // Playback state wire shape (M5): ephemeral, never persisted server-side.
 export type SocketPlaybackState = {
@@ -35,6 +35,7 @@ export type ServerToClientEvents = {
   "playback:updated": (payload: SocketPlaybackState) => void;
   "playback:stopped": (payload: Record<string, never>) => void;
   "stats:updated": (payload: SocketStats) => void;
+  "insight:generated": (payload: { insight: Insight }) => void;
 };
 
 // Client → Server (minimal — reads stay on REST)

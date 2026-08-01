@@ -3,6 +3,7 @@ import prisma from "../config/prisma";
 import { requireAuth, getSession } from "../middleware/auth";
 import { spotifyGet } from "../services/spotifyService";
 import { eventBus } from "../events/bus";
+import type { InsightKind } from "../events/types";
 import {
   computeStats,
   computeTopAlbumsSince,
@@ -198,6 +199,48 @@ router.get("/stats", async (req: Request, res: Response) => {
   // Miss → compute on read via the same pure function the engine writes with.
   const stats = await computeStats(userId);
   res.json(stats);
+});
+
+// M7 (§4.7): AI Insights — the read path serves persisted Insight rows only.
+// Generation never happens inline on a request; on-demand generation is a
+// published bus event (§4.5 "does not trigger long-running work inline").
+router.get("/insights", async (req: Request, res: Response) => {
+  const session = getSession(req);
+  const userId = session.userId!;
+
+  const insights = await prisma.insight.findMany({
+    where: { userId },
+    orderBy: { generatedAt: "desc" },
+    take: 10,
+  });
+
+  res.json({
+    data: insights.map((insight) => ({
+      id: insight.id,
+      kind: insight.kind,
+      content: insight.content,
+      model: insight.model,
+      periodStart: insight.periodStart.toISOString(),
+      periodEnd: insight.periodEnd.toISOString(),
+      generatedAt: insight.generatedAt.toISOString(),
+    })),
+  });
+});
+
+// M7: on-demand generation. Returns immediately with `accepted: true` and
+// publishes insight.requested; the Insights Engine generates in the background
+// and pushes the result via insight:generated when connected (§7.4 — the
+// client also re-fetches REST, so a missing socket still converges).
+router.post("/insights/request", async (req: Request, res: Response) => {
+  const session = getSession(req);
+  const userId = session.userId!;
+
+  // v1 ships weekly_recap only; unknown kinds degrade to the default rather
+  // than failing the request (§7.4 REST-degradable behavior).
+  const kind: InsightKind = "weekly_recap";
+
+  eventBus.publish("insight.requested", { userId, kind, reason: "manual" });
+  res.json({ accepted: true, kind });
 });
 
 export default router;

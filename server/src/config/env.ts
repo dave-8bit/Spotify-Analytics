@@ -45,6 +45,23 @@ export const getHistoryPollIntervalMinutes = (): number => {
   return minutes;
 };
 
+// AI Insights (M7, ARCHITECTURE.md §4.7, §11.1). GROQ_API_KEY is *optional*:
+// the app must boot and every non-AI feature must work without it. Insight
+// requests are accepted but degrade gracefully when the key is missing (the
+// Insights Engine logs and skips) — no crashes, no failed boot.
+export const getGroqApiKey = (): string | undefined =>
+  process.env.GROQ_API_KEY || undefined;
+
+const DEFAULT_GROQ_MODEL = "llama-3.3-70b-versatile";
+
+export const getGroqModel = (): string =>
+  process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL;
+
+// Daily insight generation cron (ARCHITECTURE.md §8.1: "Daily (future)"). UTC
+// explicitly — never server-local — to avoid deployment timezone ambiguity.
+// §4.7: insight generation runs on a slow cadence; 09:00 UTC default.
+export const INSIGHT_GENERATION_CRON = "0 9 * * *";
+
 // Playback polling cadence (ARCHITECTURE.md §8.1: "30–60 s", M5). Runs only
 // for users in the Socket Registry, so this is a per-active-user cost.
 const DEFAULT_PLAYBACK_POLL_INTERVAL_SECONDS = 30;

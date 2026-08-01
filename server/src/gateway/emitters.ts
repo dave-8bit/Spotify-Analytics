@@ -5,11 +5,16 @@
 
 import type { Server } from "socket.io";
 import { eventBus } from "../events/bus";
-import type { PlaybackStatePayload, PlayEventPayload } from "../events/types";
+import type {
+  InsightPayload,
+  PlaybackStatePayload,
+  PlayEventPayload,
+} from "../events/types";
 import {
   userRoom,
   type ClientToServerEvents,
   type ServerToClientEvents,
+  type SocketInsight,
   type SocketPlaybackState,
   type SocketPlayEvent,
 } from "./events";
@@ -38,6 +43,22 @@ const toSocketPlaybackState = (
   },
   progressMs: state.progressMs,
   fetchedAt: state.fetchedAt.toISOString(),
+});
+
+const toSocketInsight = (insight: InsightPayload): SocketInsight => ({
+  id: insight.id,
+  kind: insight.kind,
+  content: {
+    title: typeof insight.content.title === "string" ? insight.content.title : undefined,
+    summary: typeof insight.content.summary === "string" ? insight.content.summary : undefined,
+    highlights: Array.isArray(insight.content.highlights)
+      ? (insight.content.highlights as string[])
+      : undefined,
+  },
+  model: insight.model,
+  periodStart: insight.periodStart,
+  periodEnd: insight.periodEnd,
+  generatedAt: insight.generatedAt,
 });
 
 // Subscribes the gateway to every M4 domain event. All emissions are scoped to
@@ -91,6 +112,14 @@ export const registerEmitters = (io: GatewayServer): (() => void) => {
         totalMinutes: stats.totalMinutes,
         uniqueTracks: stats.uniqueTracks,
         uniqueArtists: stats.uniqueArtists,
+      });
+    }),
+
+    // M7 (§7.3): new AI insight. Pure projection of the insight.generated
+    // payload — no database, no computation.
+    eventBus.subscribe("insight.generated", ({ userId, insight }) => {
+      io.to(userRoom(userId)).emit("insight:generated", {
+        insight: toSocketInsight(insight),
       });
     }),
   ];

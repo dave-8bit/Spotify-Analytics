@@ -45,8 +45,25 @@ export type StatsPayload = {
   uniqueArtists: number;
 };
 
-// Events not yet published/subscribed anywhere (insight.*) are added at their
-// owning milestone (M7) — additive only.
+// Insight kinds (M7, ARCHITECTURE.md §6.2): classifies the narrative type.
+// v1 ships "weekly_recap" (daily job + on-demand); "trend" / "discovery" are
+// future extension points.
+export type InsightKind = "weekly_recap" | "trend" | "discovery";
+
+// Mirror of a persisted Insight row — the payload of `insight.generated` (M7).
+// Declared structurally so the bus stays dependency-free. `content` is the
+// JSON body the provider returned (title + summary + highlights).
+export type InsightPayload = {
+  id: number;
+  userId: number;
+  kind: string;
+  content: Record<string, unknown>;
+  model: string;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+};
+
 export type DomainEventMap = {
   "sync.requested": { userId: number; reason: string };
   "sync.started": { userId: number };
@@ -56,6 +73,11 @@ export type DomainEventMap = {
   "playEvent.created": { userId: number; event: PlayEventPayload };
   "playback.updated": { userId: number; state: PlaybackStatePayload | null };
   "stats.updated": { userId: number; stats: StatsPayload };
+  // M7 (§4.8): insight.requested is published by REST/Workers and consumed by
+  // the Insights Engine; insight.generated is published by the Insights Engine
+  // and projected to clients by the Gateway.
+  "insight.requested": { userId: number; kind: InsightKind; reason: string };
+  "insight.generated": { userId: number; insight: InsightPayload };
 };
 
 export type DomainEventName = keyof DomainEventMap;

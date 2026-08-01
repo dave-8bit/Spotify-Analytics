@@ -51,6 +51,22 @@ export type Stats = {
   uniqueArtists: number;
 };
 
+// AI insight (M7, ARCHITECTURE.md §7.3 / §12.2): mirrors the server's
+// Insight wire shape. `content` is the JSON body the provider returned.
+export type Insight = {
+  id: number;
+  kind: string;
+  content: {
+    title?: string;
+    summary?: string;
+    highlights?: string[];
+  };
+  model: string;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+};
+
 export type DbTrack = {
   trackId: string;
   trackName: string;

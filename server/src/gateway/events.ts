@@ -44,6 +44,24 @@ export type SocketStats = {
   uniqueArtists: number;
 };
 
+// Wire shape of an AI insight (§7.3, M7): mirrors the persisted Insight row
+// (and the InsightPayload published by the Insights Engine). Dates are ISO
+// strings; `content` is the JSON body the provider returned (title/summary/
+// highlights).
+export type SocketInsight = {
+  id: number;
+  kind: string;
+  content: {
+    title?: string;
+    summary?: string;
+    highlights?: string[];
+  };
+  model: string;
+  periodStart: string;
+  periodEnd: string;
+  generatedAt: string;
+};
+
 // Server → Client
 export type ServerToClientEvents = {
   "sync:started": (payload: Record<string, never>) => void;
@@ -54,6 +72,7 @@ export type ServerToClientEvents = {
   "playback:updated": (payload: SocketPlaybackState) => void;
   "playback:stopped": (payload: Record<string, never>) => void;
   "stats:updated": (payload: SocketStats) => void;
+  "insight:generated": (payload: { insight: SocketInsight }) => void;
 };
 
 // Client → Server (minimal — reads stay on REST, §7.3)

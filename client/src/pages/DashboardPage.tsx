@@ -5,6 +5,7 @@ import type {
   Artist,
   DbArtist,
   DbTrack,
+  Insight,
   RecentTrack,
   Stats,
   TimeRange,
@@ -12,6 +13,7 @@ import type {
   User,
 } from "../types";
 import {
+  getInsights,
   getMe,
   getRecentlyPlayed,
   getStats,
@@ -21,6 +23,7 @@ import {
   getTopArtistsDb,
   getTopTracks,
   getTopTracksDb,
+  requestInsight,
   triggerSync,
 } from "../services/api";
 import useSocket from "../hooks/useSocket";
@@ -73,6 +76,8 @@ export default function DashboardPage() {
   const [albums, setAlbums] = useState<Album[]>([]);
   const [recentTracks, setRecentTracks] = useState<RecentTrack[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [insightLoading, setInsightLoading] = useState<boolean>(false);
 
   const rangeOptions: RangeOption[] = useMemo(
     () => [
@@ -138,8 +143,48 @@ export default function DashboardPage() {
     });
   });
 
+  // M7 (§7.3): a freshly generated insight arrives live and patches the same
+  // list REST loads (§7.4 degradation: no socket, the REST-loaded list still
+  // shows persisted insights).
+  useLiveEvent("insight:generated", ({ insight }) => {
+    setInsights((prev) => {
+      if (prev.some((i) => i.id === insight.id)) return prev;
+      return [insight, ...prev];
+    });
+  });
+
+  // M7 (§7.4): REST is the baseline — load persisted insights once on mount.
+  // The insight:generated socket event only enhances this list.
+  useEffect(() => {
+    let cancelled = false;
+    getInsights()
+      .then((data) => {
+        if (!cancelled) setInsights(data);
+      })
+      .catch(() => {
+        // No insights yet / API unavailable: keep the empty list (§7.4).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // M7: on-demand generation (§4.7). The server accepts immediately and
+  // generates in the background; the live socket event (or a later manual
+  // reload) converges the list.
+  const onGenerateInsight = async () => {
+    setInsightLoading(true);
+    try {
+      await requestInsight("weekly_recap");
+    } finally {
+      setInsightLoading(false);
+    }
+  };
+
   // M5 (§3.2 fast path, §7.4): playback is socket-only by design — no REST
-  // representation. Offline socket or stopped playback ⇒ the card hides.
+  // representation. The card's visibility is derived from `connected` at
+  // render time, so stale state in memory never shows while offline; a new
+  // `playback:updated` event (while connected) brings it back (§7.4).
   const [playback, setPlayback] = useState<SocketPlaybackState | null>(null);
 
   useLiveEvent("playback:updated", (state) => {
@@ -149,11 +194,6 @@ export default function DashboardPage() {
   useLiveEvent("playback:stopped", () => {
     setPlayback(null);
   });
-
-  useEffect(() => {
-    // Stale playback must not linger when the socket drops (§7.4).
-    if (!connected) setPlayback(null);
-  }, [connected]);
 
   useEffect(() => {
     // keep dataSource and selectedRange in sync
@@ -390,8 +430,120 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Now Playing (M5) — socket-only, hides when offline/stopped */}
-      {playback && <NowPlayingCard playback={playback} />}
+      {/* Now Playing (M5) — socket-only, hides when offline/stopped.
+          Visibility is derived from `connected` at render time: a stale
+          playback state in memory never shows while the socket is offline,
+          and reappears only when a new `playback:updated` event arrives. */}
+      {connected && playback && <NowPlayingCard playback={playback} />}
+
+      {/* AI Insights (M7, ARCHITECTURE.md §4.7 / §7.3) — REST baseline with a
+          live socket enhancement. A missing socket or no key degrades to a
+          simple "generate" button + persisted insights (§7.4). */}
+      <div
+        style={{
+          ...glassCardStyle(),
+          padding: 16,
+          marginBottom: 16,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            marginBottom: insights.length ? 12 : 0,
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 900, fontSize: 16 }}>✨ AI Insights</div>
+            <div style={{ color: "rgba(255,255,255,0.6)", fontSize: 12 }}>
+              Narrative summaries generated from your snapshots
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onGenerateInsight()}
+            disabled={insightLoading}
+            style={{
+              cursor: insightLoading ? "not-allowed" : "pointer",
+              padding: "9px 12px",
+              borderRadius: 10,
+              border: "1px solid rgba(29,185,84,0.35)",
+              background: insightLoading
+                ? "rgba(29,185,84,0.2)"
+                : "rgba(29,185,84,0.12)",
+              color: insightLoading ? "rgba(255,255,255,0.7)" : "#1DB954",
+              fontWeight: 800,
+            }}
+          >
+            {insightLoading ? "Generating..." : "Generate Recap"}
+          </button>
+        </div>
+
+        {insights.length === 0 ? (
+          <div style={{ color: "rgba(255,255,255,0.55)", fontSize: 13 }}>
+            No insights yet. Generate a weekly recap to see an AI summary of
+            your listening.
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {insights.map((insight) => (
+              <div
+                key={insight.id}
+                style={{
+                  ...glassCardStyle(),
+                  padding: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: 8,
+                    marginBottom: 6,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: 14 }}>
+                    {insight.content.title ?? "Insight"}
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+                    {new Date(insight.generatedAt).toLocaleDateString()}
+                  </div>
+                </div>
+                {insight.content.summary && (
+                  <div
+                    style={{
+                      color: "rgba(255,255,255,0.85)",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {insight.content.summary}
+                  </div>
+                )}
+                {insight.content.highlights &&
+                  insight.content.highlights.length > 0 && (
+                    <ul
+                      style={{
+                        margin: "8px 0 0",
+                        paddingLeft: 18,
+                        color: "rgba(255,255,255,0.75)",
+                        fontSize: 13,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      {insight.content.highlights.map((highlight, idx) => (
+                        <li key={idx}>{highlight}</li>
+                      ))}
+                    </ul>
+                  )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Stats bar */}
       <div

@@ -21,6 +21,11 @@ import {
   ANALYTICS_SWEEP_JOB_NAME,
   runAnalyticsSweepTick,
 } from "./jobs/analyticsSweep";
+import {
+  INSIGHT_GENERATION_JOB_CRON,
+  INSIGHT_GENERATION_JOB_NAME,
+  runGenerateInsightsTick,
+} from "./jobs/generateInsights";
 
 type JobDefinition = {
   name: string;
@@ -43,6 +48,11 @@ const JOBS: JobDefinition[] = [
     name: ANALYTICS_SWEEP_JOB_NAME,
     cronExpression: ANALYTICS_SWEEP_CRON,
     run: runAnalyticsSweepTick,
+  },
+  {
+    name: INSIGHT_GENERATION_JOB_NAME,
+    cronExpression: INSIGHT_GENERATION_JOB_CRON,
+    run: runGenerateInsightsTick,
   },
 ];
 

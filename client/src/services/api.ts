@@ -5,6 +5,7 @@ import type {
   Artist,
   DbArtist,
   DbTrack,
+  Insight,
   RecentTrack,
   Stats,
   TimeRange,
@@ -82,6 +83,21 @@ export async function getTopArtistsDb(
 export async function getTopAlbumsDb(days: number): Promise<Album[]> {
   const res = await api.get("/user/top-albums-db", { params: { days } });
   return res.data.data;
+}
+
+// M7 (§4.7): AI insights — REST read of persisted Insight rows. The live
+// insight:generated socket event enhances this; a missing socket degrades to
+// this REST-loaded list (§7.4).
+export async function getInsights(): Promise<Insight[]> {
+  const res = await api.get("/user/insights");
+  return res.data.data;
+}
+
+// M7: on-demand generation. The server accepts immediately and generates in
+// the background (publishing insight:generated when the socket is live); the
+// caller re-fetches via getInsights() to converge on REST.
+export async function requestInsight(kind = "weekly_recap"): Promise<void> {
+  await api.post("/user/insights/request", { kind });
 }
 
 

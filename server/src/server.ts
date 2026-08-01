@@ -13,6 +13,7 @@ import {
   registerAnalyticsSubscribers,
   stopAnalyticsEngine,
 } from "./analytics/engine";
+import { registerInsightSubscribers } from "./insights/engine";
 import { registerSyncSubscribers } from "./sync/syncService";
 import { startScheduler, stopScheduler } from "./workers/scheduler";
 
@@ -25,6 +26,7 @@ export const startServer = async (): Promise<void> => {
 
     registerSyncSubscribers();
     registerAnalyticsSubscribers();
+    registerInsightSubscribers();
 
     // Behavior is selected by ROLE (ARCHITECTURE.md §8.2, §11.2): "api" serves
     // HTTP only, "worker" runs schedulers only, "all" (default) does both in
