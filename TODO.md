@@ -1,12 +1,17 @@
-# Fix ESLint `react-hooks/set-state-in-effect` in DashboardPage.tsx
+# Production Readiness Phase P1 — Implementation Checklist
 
-## Steps
-- [x] Read relevant files (DashboardPage, NowPlayingCard, useSocket, useLiveEvents, socketEvents, eslint config, ARCHITECTURE.md)
-- [x] Confirm exact ESLint error (`react-hooks/set-state-in-effect` at line 198:21)
-- [x] Plan approved by user
-- [x] Remove the `useEffect` containing `if (!connected) setPlayback(null)`
-- [x] Change Now Playing render guard to `{connected && playback && (<NowPlayingCard ... />)}`
-- [x] Run client typecheck (`tsc --noEmit`) — passes (empty output)
-- [x] Run ESLint (`npm run lint`) — passes (no errors/warnings)
-- [x] Report exact files changed and results
+**Status Symbols:** `[ ]` pending · `[x]` done
 
+## Deploy wiring & production build setup
+
+- [x] 1. Add Express static serving + SPA fallback in `server/src/app.ts`
+       (exclude `/api`, `/auth`, `/health`, `/socket.io`; only production).
+- [x] 2. Add Prisma build/deploy scripts in `server/package.json`
+       (`build:prisma`, `migrate:deploy`, and generate in `build`).
+- [x] 3. Add committed root `.env.example` with all env vars + safe placeholders.
+- [x] 4. Add `Dockerfile` (multi-stage: client build → server build → runtime, ROLE=all).
+- [x] 5. Add `.dockerignore`.
+- [x] 6. Verify server typecheck/build (`npm run build`).
+- [x] 7. Verify client typecheck/build (`npm run build`).
+- [x] 8. Verify production server serves `client/dist` + SPA fallback behavior.
+- [x] 9. Verify Prisma generate + `migrate deploy` commands.

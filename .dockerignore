@@ -1,0 +1,30 @@
+# Dependencies
+node_modules
+**/node_modules
+
+# Build outputs
+dist
+**/dist
+client/dist
+
+# Environment & secrets
+.env
+.env.*
+!*.env.example
+**/.env
+**/.env.*
+!**/*.env.example
+
+# Prisma generated artifacts (regenerated in the image)
+server/generated
+**/.prisma
+
+# VCS / editor
+.git
+.gitignore
+.github
+.vscode
+.idea
+*.log
+npm-debug.log*
+yarn-debug.log*
